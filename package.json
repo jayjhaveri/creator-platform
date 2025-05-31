@@ -3,15 +3,16 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-   "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js --watch dist --ext js,json\"",
+    "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js --watch dist --ext js,json\"",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node -r dotenv/config dist/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google-cloud/tasks": "^6.1.0",
     "@sendgrid/mail": "^8.1.5",
     "axios": "^1.9.0",
     "body-parser": "^2.2.0",
@@ -19,7 +20,10 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "firebase-admin": "^13.4.0",
+    "groq-sdk": "^0.23.0",
     "helmet": "^8.1.0",
+    "pino": "^9.7.0",
+    "pino-pretty": "^13.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "twilio": "^5.7.0"

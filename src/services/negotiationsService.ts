@@ -5,12 +5,16 @@ const COLLECTION = 'negotiations';
 
 export const createNegotiation = async (data: Negotiation) => {
     const now = new Date().toISOString();
-    const docRef = await db.collection(COLLECTION).add({
+    const negotiationRef = db.collection(COLLECTION).doc();
+    data.negotiationId = negotiationRef.id;
+
+
+    await negotiationRef.set({
         ...data,
         createdAt: now,
         updatedAt: now,
     });
-    return { id: docRef.id };
+    return { id: negotiationRef.id };
 };
 
 export const getNegotiationById = async (id: string) => {

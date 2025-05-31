@@ -5,12 +5,16 @@ const COLLECTION = 'deals';
 
 export const createDeal = async (data: Deal) => {
     const now = new Date().toISOString();
-    const docRef = await db.collection(COLLECTION).add({
+
+    const dealRef = db.collection(COLLECTION).doc();
+    data.dealId = dealRef.id;
+
+    await dealRef.set({
         ...data,
         createdAt: now,
         updatedAt: now,
     });
-    return { id: docRef.id };
+    return { id: dealRef.id };
 };
 
 export const getDealById = async (id: string): Promise<Deal> => {

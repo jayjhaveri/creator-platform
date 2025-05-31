@@ -1,5 +1,7 @@
+import { v4 as uuidv4 } from 'uuid';
+
 export interface Brand {
-  brandId: string;
+  brandId: string = '';
   brandName: string;
   email: string;
   phone: string;
@@ -13,7 +15,7 @@ export interface Brand {
 }
 
 export interface Creator {
-  creatorId: string;
+  creatorId: string = '';
   displayName: string;
   email: string;
   phone: string;
@@ -46,7 +48,7 @@ export interface CampaignTargetCategory {
 }
 
 export interface Campaign {
-  campaignId: string;
+  campaignId: string = '';
   brandId: string;
   campaignName: string;
   description: string;
@@ -70,7 +72,7 @@ export interface Deliverable {
 }
 
 export interface Negotiation {
-  negotiationId: string;
+  negotiationId: string = '';
   campaignId: string;
   brandId: string;
   creatorId: string;
@@ -90,7 +92,7 @@ export interface Negotiation {
 }
 
 export interface Communication {
-  communicationId: string;
+  communicationId: string = '';
   negotiationId: string;
   type: 'email' | 'voice_call' | 'instagram_dm' | 'youtube_message';
   direction: 'outbound' | 'inbound';
@@ -106,7 +108,7 @@ export interface Communication {
 }
 
 export interface Deal {
-  dealId: string;
+  dealId: string = '';
   negotiationId: string;
   campaignId: string;
   brandId: string;

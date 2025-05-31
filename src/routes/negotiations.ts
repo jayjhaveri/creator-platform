@@ -8,6 +8,9 @@ import {
     deleteNegotiation,
     listNegotiations
 } from '../controllers/negotiationsController';
+import { sendInitialEmail } from '../agents/emailAgent';
+import { db } from '../config/firebase';
+import { Brand, Campaign, Creator } from '../types/schema';
 
 const router = express.Router();
 
@@ -20,7 +23,7 @@ const router = express.Router();
 
 /**
  * @swagger
- * /negotiations:
+ * /api/negotiations:
  *   post:
  *     summary: Create a new negotiation
  *     tags: [Negotiations]
@@ -42,7 +45,7 @@ router.post('/', verifyFirebaseToken, asyncHandler(createNegotiation));
 
 /**
  * @swagger
- * /negotiations/{id}:
+ * /api/negotiations/{id}:
  *   get:
  *     summary: Get a negotiation by ID
  *     tags: [Negotiations]
@@ -64,7 +67,7 @@ router.get('/:id', verifyFirebaseToken, asyncHandler(getNegotiationById));
 
 /**
  * @swagger
- * /negotiations/{id}:
+ * /api/negotiations/{id}:
  *   put:
  *     summary: Update a negotiation
  *     tags: [Negotiations]
@@ -92,7 +95,7 @@ router.put('/:id', verifyFirebaseToken, asyncHandler(updateNegotiation));
 
 /**
  * @swagger
- * /negotiations/{id}:
+ * /api/negotiations/{id}:
  *   delete:
  *     summary: Delete a negotiation
  *     tags: [Negotiations]
@@ -114,7 +117,7 @@ router.delete('/:id', verifyFirebaseToken, asyncHandler(deleteNegotiation));
 
 /**
  * @swagger
- * /negotiations:
+ * /api/negotiations:
  *   get:
  *     summary: List all negotiations
  *     tags: [Negotiations]
@@ -127,5 +130,57 @@ router.delete('/:id', verifyFirebaseToken, asyncHandler(deleteNegotiation));
  *         description: Server error
  */
 router.get('/', verifyFirebaseToken, asyncHandler(listNegotiations));
+
+/**
+ * @swagger
+ * /api/negotiations/{id}/start:
+ *   post:
+ *     summary: Start a negotiation by sending an initial email
+ *     tags: [Negotiations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Email sent successfully
+ *       404:
+ *         description: Negotiation or related document not found
+ */
+
+router.post('/:id/start', verifyFirebaseToken, asyncHandler(async (req, res) => {
+    const negotiationId = req.params.id;
+
+    const negotiationDoc = await db.collection('negotiations').doc(negotiationId).get();
+    if (!negotiationDoc.exists) {
+        return res.status(404).json({ error: 'Negotiation not found' });
+    }
+    const negotiation = negotiationDoc.data();
+
+    if (!negotiation) {
+        return res.status(404).json({ error: 'Negotiation data not found' });
+    }
+
+    const [brandDoc, creatorDoc, campaignDoc] = await Promise.all([
+        db.collection('brands').doc(negotiation.brandId).get(),
+        db.collection('creators').doc(negotiation.creatorId).get(),
+        db.collection('campaigns').doc(negotiation.campaignId).get(),
+    ]);
+
+    if (!brandDoc.exists || !creatorDoc.exists || !campaignDoc.exists) {
+        return res.status(404).json({ error: 'Related document not found' });
+    }
+
+    const brand = brandDoc.data() as Brand;
+    const creator = creatorDoc.data() as Creator;
+    const campaign = campaignDoc.data() as Campaign;
+
+    const result = await sendInitialEmail(creator, campaign, brand, negotiationId);
+    res.json(result);
+}));
 
 export default router;

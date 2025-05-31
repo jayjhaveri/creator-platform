@@ -6,13 +6,17 @@ const COLLECTION_NAME = 'brands';
 
 export const createBrand = async (data: Brand) => {
     const timestamp = new Date().toISOString();
+
+    const brandDocRef = db.collection(COLLECTION_NAME).doc();
+    data.brandId = brandDocRef.id;
+
     const brandWithTimestamps = {
         ...data,
         createdAt: timestamp,
         updatedAt: timestamp
     };
-    const ref = await db.collection(COLLECTION_NAME).add(brandWithTimestamps);
-    return ref.id;
+    await brandDocRef.set(brandWithTimestamps);
+    return { id: brandDocRef.id };
 };
 
 export const getBrandById = async (id: string): Promise<Brand | null> => {

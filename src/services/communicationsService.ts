@@ -5,11 +5,15 @@ const COLLECTION = 'communications';
 
 export const createCommunication = async (data: Communication) => {
     const now = new Date().toISOString();
-    const docRef = await db.collection(COLLECTION).add({
+
+    const communicationRef = db.collection(COLLECTION).doc();
+    data.communicationId = communicationRef.id;
+
+    await communicationRef.set({
         ...data,
         createdAt: now,
     });
-    return { id: docRef.id };
+    return { id: communicationRef.id };
 };
 
 export const getCommunicationById = async (id: string) => {

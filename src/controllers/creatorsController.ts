@@ -4,8 +4,8 @@ import { Creator } from '../types/schema';
 
 export const createCreator = async (req: Request, res: Response) => {
     try {
-        const creator: Creator = req.body;
-        const result = await creatorService.createCreator(creator);
+
+        const result = await creatorService.createCreator(req.body);
         res.status(201).json(result);
     } catch (error) {
         console.error('Error creating creator:', error);

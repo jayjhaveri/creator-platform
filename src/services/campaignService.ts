@@ -3,12 +3,16 @@ import { Campaign } from '../types/schema';
 
 export const createCampaign = async (campaign: Campaign) => {
     const now = new Date().toISOString();
-    const docRef = await db.collection('campaigns').add({
+
+    const campaignRef = db.collection('campaigns').doc();
+    campaign.campaignId = campaignRef.id;
+
+    await campaignRef.set({
         ...campaign,
         createdAt: now,
         updatedAt: now,
     });
-    return { id: docRef.id };
+    return { id: campaignRef.id };
 };
 
 export const getCampaignById = async (id: string) => {

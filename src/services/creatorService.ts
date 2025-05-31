@@ -1,16 +1,23 @@
 import { db } from '../config/firebase';
 import { Creator } from '../types/schema';
+import { v4 as uuidv4 } from 'uuid';
 
 const COLLECTION = 'creators';
 
 export const createCreator = async (data: Creator) => {
   const now = new Date().toISOString();
-  const docRef = await db.collection(COLLECTION).add({
+
+  const creatorRef = db.collection(COLLECTION).doc();
+  const creatorId = creatorRef.id;
+
+  await creatorRef.set({
     ...data,
+    creatorId,
     createdAt: now,
     updatedAt: now,
   });
-  return { id: docRef.id };
+
+  return { id: creatorId };
 };
 
 export const getCreatorById = async (id: string) => {
@@ -37,3 +44,4 @@ export const listCreators = async () => {
   const snapshot = await db.collection(COLLECTION).get();
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
+
