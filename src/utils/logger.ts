@@ -1,15 +1,10 @@
 // src/utils/logger.ts
-import pino from 'pino';
 
-const logger = pino({
-    transport: {
-        target: 'pino-pretty',
-        options: {
-            translateTime: 'SYS:standard',
-            colorize: true,
-            ignore: 'pid,hostname',
-        },
-    },
-});
+const logger = {
+    debug: (...args: any[]) => console.debug('[DEBUG]', ...args),
+    info: (...args: any[]) => console.info('[INFO]', ...args),
+    warn: (...args: any[]) => console.warn('[WARN]', ...args),
+    error: (...args: any[]) => console.error('[ERROR]', ...args),
+};
 
 export default logger;

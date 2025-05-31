@@ -4,6 +4,7 @@ import { Creator, Campaign, Communication, Brand } from '../types/schema';
 import { v4 as uuidv4 } from 'uuid';
 import { generateEmailContent } from '../utils/generateEmailContent';
 import logger from '../utils/logger';
+import { scheduleFollowUpTask } from '../utils/scheduleFollowUpTask';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
@@ -16,6 +17,7 @@ export const sendInitialEmail = async (
     const to = creator.email;
     const brandEmailPrefix = brand.email.split('@')[0].replace(/\W/g, '');
     const fromEmail = `${brandEmailPrefix}--${negotiationId}@techable.in`;
+    const replyEmail = `${brandEmailPrefix}--${negotiationId}@parse.techable.in`;
     const fromName = `${brand.brandName} via CreatorPlatform`;
 
     logger.info(`Sending initial email to ${to} from ${fromEmail}`);
@@ -30,9 +32,15 @@ export const sendInitialEmail = async (
         },
         subject: content.subject,
         text: content.body,
+        reply_to: {
+            email: replyEmail,
+            name: fromName, // optional but good for clarity in clients like Gmail
+        },
     };
 
     await sgMail.send(msg);
+
+    await scheduleFollowUpTask(negotiationId, 24 * 60 * 60); // schedule after 2 days (in seconds)
 
     const communicationId = uuidv4();
     const now = new Date().toISOString();

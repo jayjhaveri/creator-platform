@@ -183,4 +183,32 @@ router.post('/:id/start', verifyFirebaseToken, asyncHandler(async (req, res) => 
     res.json(result);
 }));
 
+// In negotiationsRouter.ts
+import { handleFollowUp } from '../controllers/followUpController';
+
+/**
+ * @swagger
+ * /negotiations/{id}/follow-up:
+ *   post:
+ *     summary: Trigger a follow-up email if creator hasn't replied
+ *     tags: [Negotiations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The negotiation ID
+ *     responses:
+ *       200:
+ *         description: Follow-up sent or skipped
+ *       400:
+ *         description: Missing ID or bad request
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/:id/follow-up', verifyFirebaseToken, asyncHandler(handleFollowUp));
+
 export default router;

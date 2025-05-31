@@ -89,6 +89,7 @@ export interface Negotiation {
   voiceCallCompleted: boolean;
   createdAt: string;
   updatedAt: string;
+  escalationCount: number = 0;
 }
 
 export interface Communication {
