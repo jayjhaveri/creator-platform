@@ -25,8 +25,8 @@ const PORT = process.env.PORT || 8080;
 // Security & middleware
 app.use(helmet());
 app.use(cors());
-app.use(requestLogger);
 app.use(bodyParser.json());
+app.use(requestLogger);
 
 // Swagger
 setupSwagger(app);

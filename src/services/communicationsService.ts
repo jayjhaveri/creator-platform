@@ -3,7 +3,7 @@ import { Communication } from '../types/schema';
 
 const COLLECTION = 'communications';
 
-export const createCommunication = async (data: Communication) => {
+export const createCommunication = async (data: any) => {
     const now = new Date().toISOString();
 
     const communicationRef = db.collection(COLLECTION).doc();

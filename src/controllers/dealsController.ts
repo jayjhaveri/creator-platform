@@ -4,8 +4,8 @@ import { Deal } from '../types/schema';
 
 export const createDeal = async (req: Request, res: Response) => {
     try {
-        const data: Deal = req.body;
-        const result = await dealsService.createDeal(data);
+
+        const result = await dealsService.createDeal(req.body);
         res.status(201).json(result);
     } catch (error) {
         console.error('Error creating deal:', error);

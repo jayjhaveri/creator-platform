@@ -20,12 +20,17 @@ const MAX_ESCALATIONS = 2;
 export const handleInboundEmail = async (req: Request, res: Response) => {
     try {
         logger.info('Received inbound email request', req.body);
-        const { from, to, subject, text } = req.body;
+        const { from, to, subject, text, messageId, inReplyTo, references } = req.body;
+
+
+        logger.info('Parsed message ID:', messageId);
 
         logger.info('Inbound email received `from`:', from);
         logger.info('Inbound email received `to`:', to);
         logger.info('Inbound email received `subject`:', subject);
         logger.info('Inbound email received `text`:', text);
+        logger.info('Inbound email received `inReplyTo`:', inReplyTo);
+        logger.info('Inbound email received `references`:', references);
 
         const toRaw: string = to || '';
         const parsedTo = parseOneAddress(toRaw);
@@ -88,6 +93,7 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
             voiceCallSummary: '',
             followUpRequired: false,
             followUpDate: '',
+            messageId: messageId || '',
             createdAt: now,
         };
 
@@ -135,14 +141,9 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
             const campaign = campaignDoc.data() as Campaign;
 
             const followUp = await generatePhoneRequestEmail(
-                brand,
-                creator,
-                campaign,
-                previousEmail?.content || '',
-                text || ''
-            );
+                { brand, creator, campaign, previousEmailSubject: previousEmail?.subject || '', previousEmailBody: previousEmail?.content || '', creatorReply: text || '' });
 
-            await sendFollowUpViaCloudTask(followUp, brand, creator, negotiationId, now);
+            await sendFollowUpViaCloudTask({ followUp, brand, creator, negotiationId, now, inReplyToMessageId: messageId, referencesHeader: references });
 
             await db.collection('negotiations').doc(negotiationId).update({
                 escalationCount: currentEscalations + 1,
@@ -155,23 +156,32 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
             const campaign = campaignDoc.data() as Campaign;
 
             const followUp = await generatePhoneRequestEmail(
-                brand,
-                creator,
-                campaign,
-                previousEmail?.content || '',
-                text || ''
-            );
+                { brand, creator, campaign, previousEmailSubject: previousEmail?.subject || '', previousEmailBody: previousEmail?.content || '', creatorReply: text || '' });
 
-            await sendFollowUpViaCloudTask(followUp, brand, creator, negotiationId, now);
+            await sendFollowUpViaCloudTask({ followUp, brand, creator, negotiationId, now, inReplyToMessageId: messageId, referencesHeader: references });
         }
 
         // ✅ Update phone if found
-        if (analysis.phoneNumber && /^\d{10,15}$/.test(analysis.phoneNumber)) {
-            const targetField = creator.hasManager ? 'managerPhone' : 'phone';
-            await db.collection('creators').doc(creator.creatorId).update({
-                [targetField]: analysis.phoneNumber,
-                updatedAt: now,
-            });
+        if (analysis.phoneNumber) {
+            // Normalize phone number: keep digits, allow leading +
+            let normalizedPhone = analysis.phoneNumber.trim();
+            if (normalizedPhone.startsWith('+')) {
+                normalizedPhone = '+' + normalizedPhone.slice(1).replace(/\D/g, '');
+            } else {
+                normalizedPhone = normalizedPhone.replace(/\D/g, '');
+            }
+            // Validate length (10-15 digits, not counting +)
+            const digitsOnly = normalizedPhone.startsWith('+') ? normalizedPhone.slice(1) : normalizedPhone;
+            if (digitsOnly.length >= 10 && digitsOnly.length <= 15) {
+                logger.info(`Updating phone number for creator ${creator.creatorId}: ${normalizedPhone}`);
+                const targetField = creator.hasManager ? 'managerPhone' : 'phone';
+                await db.collection('creators').doc(creator.creatorId).update({
+                    [targetField]: normalizedPhone,
+                    updatedAt: now,
+                });
+            } else {
+                logger.warn(`Phone number found but invalid length after normalization: ${analysis.phoneNumber} => ${normalizedPhone}`);
+            }
         }
 
         // ✅ Update AI notes
@@ -194,15 +204,28 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
 };
 
 async function sendFollowUpViaCloudTask(
-    followUp: { subject: string; body: string },
-    brand: Brand,
-    creator: Creator,
-    negotiationId: string,
-    now: string
-) {
+    { followUp, brand, creator, negotiationId, now, inReplyToMessageId, referencesHeader }: { followUp: { subject: string; body: string; }; brand: Brand; creator: Creator; negotiationId: string; now: string; inReplyToMessageId?: string; referencesHeader?: string; }) {
     const followUpId = uuidv4();
     const fromEmail = `${brand.email.split('@')[0].replace(/\W/g, '')}--${negotiationId}@techable.in`;
     const fromName = `${brand.brandName} via CreatorPlatform`;
+
+    const followUpMessageId = `${followUpId}@techable.in`;
+
+    const newReferences = buildReferences(referencesHeader, inReplyToMessageId);
+
+    //print all request parameters
+    logger.info('Sending follow-up email via Cloud Task with payload:', {
+        followUpId,
+        negotiationId,
+        creatorEmail: creator.email,
+        subject: followUp.subject,
+        body: followUp.body,
+        fromEmail,
+        fromName,
+        inReplyToMessageId,
+        newReferences,
+        messageId: followUpMessageId
+    });
 
     const taskPayload = {
         to: creator.email,
@@ -210,6 +233,9 @@ async function sendFollowUpViaCloudTask(
         text: followUp.body,
         fromEmail,
         fromName,
+        inReplyTo: inReplyToMessageId,
+        references: newReferences,
+        messageId: followUpMessageId
     };
 
     const parent = tasksClient.queuePath(process.env.GCP_PROJECT!, QUEUE_LOCATION, QUEUE_NAME);
@@ -238,25 +264,24 @@ async function sendFollowUpViaCloudTask(
         voiceCallSummary: '',
         followUpRequired: false,
         followUpDate: '',
+        messageId: `<${followUpMessageId}>`,
+        references: newReferences,
         createdAt: now,
     });
 }
 
 export const sendFollowUpEmail = async (req: Request, res: Response) => {
     try {
-        const { to, subject, text, fromEmail, fromName } = req.body;
+        const { to, subject, text, fromEmail, fromName, inReplyTo, references = "", messageId } = req.body;
+
+        logger.info('Sending follow-up email with body:', req.body);
+        logger.info(`inReplyTo: ${inReplyTo}`);
 
         if (!to || !subject || !text || !fromEmail || !fromName) {
             return res.status(400).json({ error: 'Missing fields in request body' });
         }
 
-        //change replyTo domain to parse.techable.in
-        const replyToEmail = fromEmail.replace(/@.*$/, '@parse.techable.in');
-        logger.info(`Sending follow-up email to ${to} from ${fromEmail}`);
-        logger.info(`Reply-To set to ${replyToEmail}`);
-
-
-        await sgMail.send({
+        const msg: any = {
             to,
             from: {
                 email: fromEmail,
@@ -265,10 +290,23 @@ export const sendFollowUpEmail = async (req: Request, res: Response) => {
             subject,
             text,
             replyTo: {
-                email: replyToEmail,
-                name: fromName, // optional but good for clarity in clients like Gmail
+                email: fromEmail.replace(/@.*$/, '@parse.techable.in'),
+                name: fromName,
             },
-        });
+        };
+
+        if (inReplyTo || references) {
+            msg.headers = {
+                ...(inReplyTo && { 'In-Reply-To': `<${inReplyTo}>` }),
+                ...(references && { 'References': references.startsWith('<') ? references : `<${references}>` }),
+                ...(messageId && { 'Message-ID': `<${messageId}>` }),
+            };
+        }
+
+        logger.info(`Sending follow-up email to ${to} from ${fromEmail}`);
+        logger.info(`Reply-To set to ${msg.replyTo.email}`);
+
+        await sgMail.send(msg);
 
         console.log(`[Follow-Up] Sent email to ${to}`);
         res.status(200).send('Follow-up email sent successfully');
@@ -277,3 +315,9 @@ export const sendFollowUpEmail = async (req: Request, res: Response) => {
         res.status(500).send('Failed to send follow-up email');
     }
 };
+
+export function buildReferences(previous?: string, replyToId?: string): string {
+    const cleanedPrevious = previous?.trim() || '';
+    const cleanedReplyTo = replyToId ? `<${replyToId.replace(/^<|>$/g, '')}>` : '';
+    return [cleanedPrevious, cleanedReplyTo].filter(Boolean).join(' ').trim();
+}

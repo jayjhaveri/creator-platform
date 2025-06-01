@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const COLLECTION = 'creators';
 
-export const createCreator = async (data: Creator) => {
+export const createCreator = async (data: any) => {
   const now = new Date().toISOString();
 
   const creatorRef = db.collection(COLLECTION).doc();

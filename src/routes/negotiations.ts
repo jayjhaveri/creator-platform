@@ -209,6 +209,6 @@ import { handleFollowUp } from '../controllers/followUpController';
  *       500:
  *         description: Internal server error
  */
-router.post('/:id/follow-up', verifyFirebaseToken, asyncHandler(handleFollowUp));
+router.post('/:id/follow-up', asyncHandler(handleFollowUp));
 
 export default router;

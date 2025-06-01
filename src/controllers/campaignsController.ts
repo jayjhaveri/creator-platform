@@ -4,8 +4,8 @@ import { Campaign } from '../types/schema';
 
 export const createCampaign = async (req: Request, res: Response) => {
     try {
-        const campaign: Campaign = req.body;
-        const result = await campaignService.createCampaign(campaign);
+
+        const result = await campaignService.createCampaign(req.body);
         res.status(201).json(result);
     } catch (error) {
         console.error('Error creating campaign:', error);

@@ -24,6 +24,8 @@ export const sendInitialEmail = async (
 
     const content = await generateEmailContent(brand, creator, campaign);
 
+    const messageId = `<${uuidv4()}@techable.in>`;
+
     const msg = {
         to,
         from: {
@@ -32,6 +34,13 @@ export const sendInitialEmail = async (
         },
         subject: content.subject,
         text: content.body,
+        headers: {
+            'Message-ID': messageId, // unique message ID
+            'X-Negotiation-ID': negotiationId, // custom header for tracking
+            'X-Brand-ID': brand.brandId, // custom header for brand tracking
+            'X-Creator-Email': creator.email,
+            'X-Campaign-ID': campaign.campaignId,
+        },
         reply_to: {
             email: replyEmail,
             name: fromName, // optional but good for clarity in clients like Gmail
@@ -58,6 +67,7 @@ export const sendInitialEmail = async (
         voiceCallSummary: '',
         followUpRequired: true,
         followUpDate: '',
+        messageId,
         createdAt: now,
     };
 

@@ -4,8 +4,7 @@ import { Brand } from '../types/schema';
 
 export const createBrand = async (req: Request, res: Response) => {
     try {
-        const brand: Brand = req.body;
-        const id = await brandService.createBrand(brand);
+        const { id } = await brandService.createBrand(req.body);
         res.status(201).json({ id });
     } catch (error) {
         console.error('Error creating brand:', error);

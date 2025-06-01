@@ -45,23 +45,39 @@ export const processEmailFollowUp = async (negotiationId: string) => {
     const previousEmail = lastOutboundSnap.docs[0]?.data() as Communication | undefined;
 
     const { subject, body } = await generatePhoneRequestEmail(
-        brand,
-        creator,
-        campaign,
-        previousEmail?.content ?? '',
-        undefined // No previous email content provided
-    );
+        {
+            brand, creator, campaign, previousEmailSubject: previousEmail?.subject ?? '', previousEmailBody: undefined // No previous email content provided
+        });
 
     const brandEmailPrefix = brand.email.split('@')[0].replace(/\W/g, '');
     const fromEmail = `${brandEmailPrefix}--${negotiationId}@techable.in`;
+    const replyToEmail = `${brandEmailPrefix}--${negotiationId}@parse.techable.in`;
     const now = new Date().toISOString();
     const communicationId = uuidv4();
 
+    const messageId = `<${uuidv4()}@techable.in>`;
+
+    const fromName = `${brand.brandName} via CreatorPlatform`;
+
+
     await sendEmail({
         to: creator.email,
-        from: fromEmail,
+        from: {
+            email: fromEmail,
+            name: fromName,
+        },
         subject,
         text: body,
+        replyTo: {
+            email: replyToEmail,
+            name: `${fromName}`,
+        },
+        headers: {
+            'Message-ID': messageId,
+            'X-Negotiation-ID': negotiationId,
+            'X-Brand-ID': brand.brandId,
+            'X-Campaign-ID': campaign.campaignId,
+        },
     });
 
     const communication: Communication = {
@@ -78,6 +94,7 @@ export const processEmailFollowUp = async (negotiationId: string) => {
         followUpRequired: false,
         followUpDate: '',
         createdAt: now,
+        messageId: messageId
     };
 
     await db.collection('communications').doc(communicationId).set(communication);

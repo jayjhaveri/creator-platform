@@ -3,7 +3,7 @@ import { Negotiation } from '../types/schema';
 
 const COLLECTION = 'negotiations';
 
-export const createNegotiation = async (data: Negotiation) => {
+export const createNegotiation = async (data: any) => {
     const now = new Date().toISOString();
     const negotiationRef = db.collection(COLLECTION).doc();
     data.negotiationId = negotiationRef.id;

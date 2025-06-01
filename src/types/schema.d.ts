@@ -1,21 +1,23 @@
 import { v4 as uuidv4 } from 'uuid';
 
 export interface Brand {
-  brandId: string = '';
+  brandId: string = ''; // Nullable for new brands
   brandName: string;
   email: string;
   phone: string;
+  uid: string; // Firebase UID of the brand owner
   website: string;
   industry: string;
+  description?: string; // Optional field for additional brand info
   companySize: 'startup' | 'small' | 'medium' | 'large' | 'enterprise';
-  totalBudget: number;
+  totalBudget: number | null; // Nullable for new brands
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Creator {
-  creatorId: string = '';
+  creatorId: string = ''; // Nullable for new creators
   displayName: string;
   email: string;
   phone: string;
@@ -48,7 +50,7 @@ export interface CampaignTargetCategory {
 }
 
 export interface Campaign {
-  campaignId: string = '';
+  campaignId: string = ''; // Nullable for new campaigns
   brandId: string;
   campaignName: string;
   description: string;
@@ -72,7 +74,7 @@ export interface Deliverable {
 }
 
 export interface Negotiation {
-  negotiationId: string = '';
+  negotiationId: string = ''; // Nullable for new negotiations
   campaignId: string;
   brandId: string;
   creatorId: string;
@@ -89,11 +91,11 @@ export interface Negotiation {
   voiceCallCompleted: boolean;
   createdAt: string;
   updatedAt: string;
-  escalationCount: number = 0;
+  escalationCount: number;
 }
 
 export interface Communication {
-  communicationId: string = '';
+  communicationId: string = ''; // Nullable for new communications
   negotiationId: string;
   type: 'email' | 'voice_call' | 'instagram_dm' | 'youtube_message';
   direction: 'outbound' | 'inbound';
@@ -105,11 +107,13 @@ export interface Communication {
   voiceCallSummary: string;
   followUpRequired: boolean;
   followUpDate: string;
+  messageId: string;
   createdAt: string;
+  references?: string; // References to previous communications or related messages
 }
 
 export interface Deal {
-  dealId: string = '';
+  dealId: string = ''; // Nullable for new deals
   negotiationId: string;
   campaignId: string;
   brandId: string;

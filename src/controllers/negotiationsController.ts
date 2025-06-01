@@ -4,8 +4,7 @@ import { Negotiation } from '../types/schema';
 
 export const createNegotiation = async (req: Request, res: Response) => {
     try {
-        const negotiation: Negotiation = req.body;
-        const result = await negotiationsService.createNegotiation(negotiation);
+        const result = await negotiationsService.createNegotiation(req.body);
         res.status(201).json(result);
     } catch (error) {
         console.error('Error creating negotiation:', error);

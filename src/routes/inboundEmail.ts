@@ -28,12 +28,33 @@ router.post(
         const subject = req.fields?.subject as string | undefined;
         const text = req.fields?.text as string | undefined;
 
+        const headers = req.fields?.headers as string | undefined;
+        let messageId: string | undefined;
+        let inReplyTo: string | undefined;
+        let references: string | undefined;
+
+        if (headers) {
+            const matchMsg = headers.match(/^Message-ID:\s*(.+)$/im);
+            const matchReply = headers.match(/^In-Reply-To:\s*(.+)$/im);
+            const matchRefs = headers.match(/^References:\s*(.+)$/im);
+
+            if (matchMsg) {
+                messageId = matchMsg[1].trim().replace(/^<|>$/g, '');
+            }
+            if (matchReply) {
+                inReplyTo = matchReply[1].trim().replace(/^<|>$/g, '');
+            }
+            if (matchRefs) {
+                references = matchRefs[1].trim();
+            }
+        }
+
         // Optionally log for debugging
         console.debug("✅ Parsed inbound email fields:", req.fields);
 
         // Forward to your controller
         await handleInboundEmail(
-            { body: { from, to, subject, text } } as any,
+            { body: { from, to, subject, text, messageId, inReplyTo, references } } as any,
             res
         );
     }

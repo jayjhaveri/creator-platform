@@ -4,8 +4,7 @@ import { Communication } from '../types/schema';
 
 export const createCommunication = async (req: Request, res: Response) => {
     try {
-        const data: Communication = req.body;
-        const newId = await communicationsService.createCommunication(data);
+        const newId = await communicationsService.createCommunication(req.body);
         res.status(201).json({ id: newId });
     } catch (error) {
         console.error('Error creating communication:', error);

@@ -1,14 +1,14 @@
 import { db } from '../config/firebase';
 import { Campaign } from '../types/schema';
 
-export const createCampaign = async (campaign: Campaign) => {
+export const createCampaign = async (data: any) => {
     const now = new Date().toISOString();
 
     const campaignRef = db.collection('campaigns').doc();
-    campaign.campaignId = campaignRef.id;
+    data.campaignId = campaignRef.id;
 
     await campaignRef.set({
-        ...campaign,
+        ...data,
         createdAt: now,
         updatedAt: now,
     });

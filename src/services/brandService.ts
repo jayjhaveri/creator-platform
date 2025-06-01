@@ -4,11 +4,11 @@ import { Timestamp } from 'firebase-admin/firestore';
 
 const COLLECTION_NAME = 'brands';
 
-export const createBrand = async (data: Brand) => {
+export const createBrand = async (data: any) => {
     const timestamp = new Date().toISOString();
 
     const brandDocRef = db.collection(COLLECTION_NAME).doc();
-    data.brandId = brandDocRef.id;
+    data.brandId = data.uid || brandDocRef.id;
 
     const brandWithTimestamps = {
         ...data,
