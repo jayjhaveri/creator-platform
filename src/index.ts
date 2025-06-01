@@ -17,6 +17,7 @@ import dealRoutes from './routes/deals';
 import inboundEmailRoutes from './routes/inboundEmail';
 import { requestLogger } from './middleware/requestLogger';
 import taskRoutes from './routes/taskRoutes';
+import initiateCall from './routes/initiateCall';
 
 
 const app = express();
@@ -42,6 +43,8 @@ app.use('/api/deals', dealRoutes);
 app.use('/inbound-email', inboundEmailRoutes);
 
 app.use('/tasks', taskRoutes);
+
+app.use('/api/initiateCall', initiateCall)
 
 app.use('/', (req, res) => {
     res.status(200).send('Welcome to the Creator Platform API! Use /api/docs for API documentation.');

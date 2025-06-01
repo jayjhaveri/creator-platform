@@ -12,6 +12,7 @@ export interface Brand {
   companySize: 'startup' | 'small' | 'medium' | 'large' | 'enterprise';
   totalBudget: number | null; // Nullable for new brands
   isActive: boolean;
+  defaultVoiceAgentId?: string; // Reference to the default agent in voiceAgents collection
   createdAt: string;
   updatedAt: string;
 }
@@ -127,4 +128,60 @@ export interface Deal {
   dealStatus: 'active' | 'completed' | 'cancelled';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface KnowledgeBase {
+  kbId: string; // ElevenLabs knowledge base ID
+  name: string;
+  brandId: string;
+  creatorId?: string;
+  campaignId?: string;
+  negotiationId?: string;
+  sourceType: 'generated' | 'manual' | 'email' | 'deal_summary';
+  sourceDocId?: string; // ID of the originating doc/email/etc.
+  content: string; // Markdown or plain text content
+  deleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VoiceAgent {
+  agentId: string; // ElevenLabs Agent ID
+  brandId: string;
+  linkedKbIds: string[]; // List of knowledge base IDs attached to the agent
+  defaultPhoneNumberId: string; // ElevenLabs phone number ID assigned to this agent
+  isActive: boolean;
+  firstMessage?: string; // Optional first message used in voice calls
+  systemPrompt?: string; // Optional system prompt or instructions
+  createdAt: string;
+  updatedAt: string;
+  agentPhoneNumberId?: string; // Optional reference to the phone number used by this agent
+}
+
+export interface VoiceCommunication {
+  voiceCommunicationId: string;
+  negotiationId: string;
+  brandId: string;
+  creatorId: string;
+  voiceAgentId: string; // Reference to the voice agent used
+  agentId: string;
+  conversationId: string;
+  callSid: string;
+  status: 'initiated' | 'in-progress' | 'processing' | 'done' | 'failed';
+  hasAudio: boolean;
+  hasUserAudio: boolean;
+  hasResponseAudio: boolean;
+  startTimeUnixSecs: number;
+  callDurationSecs: number;
+  transcript: VoiceTranscriptMessage[];
+  rawPayload: any; // full JSON payload from ElevenLabs
+  createdAt: string;
+  updatedAt: string;
+  phone: string; // Phone number used for the call
+}
+
+export interface VoiceTranscriptMessage {
+  role: 'user' | 'agent';
+  message: string;
+  time_in_call_secs: number;
 }

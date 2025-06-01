@@ -3,11 +3,13 @@ import { db } from '../config/firebase';
 import { Brand, Campaign, Communication, Creator, Negotiation } from '../types/schema';
 import { v4 as uuidv4 } from 'uuid';
 import { analyzeInboundReply } from '../agents/replyAgent';
-import { generatePhoneRequestEmail } from '../utils/generateEmailContent';
+import { EmailMessage, generateNextEmail } from '../utils/generateEmailContent';
 import sgMail from '@sendgrid/mail';
 import { CloudTasksClient, protos } from '@google-cloud/tasks';
 import logger from '../utils/logger';
 import { parseOneAddress } from 'email-addresses';
+import { init } from 'groq-sdk/_shims';
+import { initiateVoiceAgent, scheduleInitiateCallViaCloudTask } from '../services/voiceAgent/initiateVoiceAgent';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
@@ -107,8 +109,6 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
             return res.status(404).send('Brand not found');
         }
 
-        const analysis = await analyzeInboundReply(text || '', negotiation, creator, brand);
-
         // Fetch the latest outbound email for context
         const outboundSnapshot = await db
             .collection('communications')
@@ -123,43 +123,49 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
         console.log('Previous outbound email:', previousEmail);
 
 
-        // ⛔ Escalation Stop Condition
-        if (analysis.action === 'escalate') {
-            const currentEscalations = negotiation.escalationCount || 0;
+        const currentEscalations = negotiation.escalationCount || 0;
 
-            if (currentEscalations >= MAX_ESCALATIONS) {
-                await db.collection('negotiations').doc(negotiationId).update({
-                    status: 'paused',
-                    updatedAt: now,
-                });
-                return res.status(200).send('Max escalations reached. No further action taken.');
-            }
+        // escalate but try again by asking for phone
+        const campaignDoc = await db.collection('campaigns').doc(negotiation.campaignId).get();
+        if (!campaignDoc.exists) return res.status(404).send('Campaign not found');
+        const campaign = campaignDoc.data() as Campaign;
 
-            // escalate but try again by asking for phone
-            const campaignDoc = await db.collection('campaigns').doc(negotiation.campaignId).get();
-            if (!campaignDoc.exists) return res.status(404).send('Campaign not found');
-            const campaign = campaignDoc.data() as Campaign;
+        //create EmailMessage array from all communications with negotiationId
+        const history = await db.collection('communications')
+            .where('negotiationId', '==', negotiationId)
+            .orderBy('createdAt', 'asc')
+            .get()
+            .then(snapshot => snapshot.docs.map(doc => doc.data() as Communication));
 
-            const followUp = await generatePhoneRequestEmail(
-                { brand, creator, campaign, previousEmailSubject: previousEmail?.subject || '', previousEmailBody: previousEmail?.content || '', creatorReply: text || '' });
 
-            await sendFollowUpViaCloudTask({ followUp, brand, creator, negotiationId, now, inReplyToMessageId: messageId, referencesHeader: references });
+        const emailHistory: EmailMessage[] = history.map(comm => ({
+            sender: comm.direction === 'inbound' ? "creator" : "brand",
+            subject: comm.subject,
+            body: comm.content,
+        }));
 
-            await db.collection('negotiations').doc(negotiationId).update({
-                escalationCount: currentEscalations + 1,
-                updatedAt: now,
-            });
+        logger.info('Email history for negotiation:', emailHistory);
 
-        } else if (!analysis.phoneNumber && analysis.action === 'request_phone') {
-            const campaignDoc = await db.collection('campaigns').doc(negotiation.campaignId).get();
-            if (!campaignDoc.exists) return res.status(404).send('Campaign not found');
-            const campaign = campaignDoc.data() as Campaign;
+        const followUp = await generateNextEmail({
+            brand: brand,
+            creator: creator,
+            campaign: campaign,
+            history: emailHistory,
+        });
 
-            const followUp = await generatePhoneRequestEmail(
-                { brand, creator, campaign, previousEmailSubject: previousEmail?.subject || '', previousEmailBody: previousEmail?.content || '', creatorReply: text || '' });
+        await sendFollowUpViaCloudTask({
+            followUp, brand,
+            creator, negotiationId, now, inReplyToMessageId: messageId,
+            referencesHeader: references
+        });
 
-            await sendFollowUpViaCloudTask({ followUp, brand, creator, negotiationId, now, inReplyToMessageId: messageId, referencesHeader: references });
-        }
+        await db.collection('negotiations').doc(negotiationId).update({
+            escalationCount: currentEscalations + 1,
+            updatedAt: now,
+        });
+
+        // Run AI analysis on the reply
+        const analysis = await analyzeInboundReply(emailHistory, negotiation, creator, brand);
 
         // ✅ Update phone if found
         if (analysis.phoneNumber) {
@@ -174,13 +180,25 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
             const digitsOnly = normalizedPhone.startsWith('+') ? normalizedPhone.slice(1) : normalizedPhone;
             if (digitsOnly.length >= 10 && digitsOnly.length <= 15) {
                 logger.info(`Updating phone number for creator ${creator.creatorId}: ${normalizedPhone}`);
-                const targetField = creator.hasManager ? 'managerPhone' : 'phone';
-                await db.collection('creators').doc(creator.creatorId).update({
-                    [targetField]: normalizedPhone,
-                    updatedAt: now,
-                });
-            } else {
-                logger.warn(`Phone number found but invalid length after normalization: ${analysis.phoneNumber} => ${normalizedPhone}`);
+                //update collection called creatorAssignments, find doc as per brandId and creatorId
+                const creatorAssignment = await db.collection('creatorAssignments').where('userId', '==', negotiation.brandId)
+                    .where('creatorId', '==', negotiation.creatorId)
+                    .get();
+
+                if (!creatorAssignment.empty) {
+                    const assignmentDoc = creatorAssignment.docs[0];
+                    await db.collection('creatorAssignments').doc(assignmentDoc.id).update({
+                        phone: normalizedPhone,
+                        phoneDiscovered: true,
+                        updatedAt: now,
+                    });
+
+                    //schedule task after 2 hours to initiate voice agent
+                    // await scheduleInitiateCallViaCloudTask(negotiationId, normalizedPhone);
+
+                } else {
+                    logger.warn(`Phone number found but invalid length after normalization: ${analysis.phoneNumber} => ${normalizedPhone}`);
+                }
             }
         }
 
@@ -192,7 +210,7 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
 
         // ✅ Update status to in_progress
         await db.collection('negotiations').doc(negotiationId).update({
-            status: 'in_progress',
+            status: analysis.action,
             updatedAt: now,
         });
 
@@ -251,6 +269,10 @@ async function sendFollowUpViaCloudTask(
 
     await tasksClient.createTask({ parent, task });
 
+    logger.info(`Created Cloud Task for follow-up email with ID: ${followUpId}`);
+    //add 30 seconds to createdAt for follow-up
+    const createdAt = new Date(Date.now() + 30 * 1000).toISOString();
+
     await db.collection('communications').doc(followUpId).set({
         communicationId: followUpId,
         negotiationId,
@@ -266,7 +288,7 @@ async function sendFollowUpViaCloudTask(
         followUpDate: '',
         messageId: `<${followUpMessageId}>`,
         references: newReferences,
-        createdAt: now,
+        createdAt: createdAt,
     });
 }
 

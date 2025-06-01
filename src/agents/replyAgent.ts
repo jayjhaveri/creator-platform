@@ -1,20 +1,21 @@
 import Groq from 'groq-sdk';
 import { Brand, Creator, Negotiation } from '../types/schema';
 import logger from '../utils/logger';
+import { EmailMessage } from '../utils/generateEmailContent';
 
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY!,
 });
 
 interface ReplyAnalysisResult {
-    action: 'request_phone' | 'initiate_call' | 'ask_rate' | 'escalate';
+    action: 'request_phone' | 'initiate_call' | 'accepted' | 'escalate' | 'canelled';
     notes: string;
     phoneNumber?: string;
     callScript?: string;
 }
 
 export const analyzeInboundReply = async (
-    replyText: string,
+    messageHistory: EmailMessage[],
     negotiation: Negotiation,
     creator: Creator,
     brand: Brand
@@ -24,16 +25,17 @@ You're an AI negotiation assistant for the brand "${brand.brandName}".
 A creator named "${creator.displayName}" has replied to your email regarding campaign "${negotiation.campaignId}".
 
 Please:
-1. Decide one of these actions only: "request_phone", "initiate_call", "escalate" or "complete".
+1. Decide one of these actions only: "request_phone", "initiate_call", "escalate", "accepted", "cancelled".
 2. If a valid phone number is included, action must be "initiate_call".
 3. If no phone number but creator seems interested or positive, use "request_phone".
 4. If the reply is vague, short, or just a greeting (like "hello", "hi", etc), use "escalate".
 5. If the user asks for rates or pricing, use "ask_rate".
-6. If the reply is a clear confirmation or next step, use "complete".
+6. If the reply is a clear acceptance, use "accepted".
+7. If the reply is negative or declines the offer, use "cancelled".
 
 Output valid JSON:
 {
-  "action": "request_phone" | "initiate_call" | "escalate" | "complete",
+  "action": "request_phone" | "initiate_call" | "escalate" | "accepted" | "cancelled",
   "notes": "short reasoning",
   "phoneNumber": "optional, if found",
   "callScript": "optional, if action is initiate_call"
@@ -41,7 +43,9 @@ Output valid JSON:
 
 Creator reply:
 """
-${replyText}
+${messageHistory
+            .map((msg) => `- ${msg.sender}: ${msg.subject}\n${msg.body}`)
+            .join('\n\n')}
 """
 `;
 

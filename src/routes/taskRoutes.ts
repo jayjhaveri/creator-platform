@@ -1,6 +1,7 @@
 import express from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
 import { processEmailFollowUp } from '../services/followUpService';
+import { pollTranscription } from '../controllers/pollTranscriptionController';
 
 const router = express.Router();
 
@@ -15,5 +16,7 @@ router.post('/follow-up', asyncHandler(async (req, res) => {
     await processEmailFollowUp(negotiationId);
     res.status(200).json({ success: true });
 }));
+
+router.post('/poll-transcription', asyncHandler(pollTranscription));
 
 export default router;

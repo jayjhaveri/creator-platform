@@ -20,15 +20,16 @@ Your goal:
 - Briefly mention the campaign and why they’re a good fit.
 - Ask for their phone number to connect via voice assistant (no pricing yet).
 
-Respond strictly in the following Markdown format:
+**Follow this strict Markdown format for your response:**
+**(If you don't follow this, your response will be rejected.)**
 
 ## Subject
-<short subject here>
+<The next email’s subject line — keep it short and clear>
 
 ## Body
-<email body here — max 150 words>
+<The next email’s body — max 150 words. Must be friendly, natural, and professional.>
 
-Do not include any explanations or extra commentary.
+**Only return the Markdown response. Do NOT include any explanations or commentary.**  
 `;
 
     const userPrompt = `
@@ -78,138 +79,111 @@ Now write:
     return { subject: safeSubject, body };
 };
 
-export async function generatePhoneRequestEmail({ brand, creator, campaign,
-    previousEmailSubject, previousEmailBody, creatorReply }: { brand: Brand; creator: Creator; campaign: Campaign; previousEmailSubject: string; previousEmailBody?: string; creatorReply?: string; }): Promise<{ subject: string; body: string; }> {
-    const systemPrompt = `
-You are an AI assistant following up on a previous email thread.
-The brand "${brand.brandName}" is trying to get in touch with the creator "${creator.displayName}" regarding the campaign "${campaign.campaignName}".
 
-Your goal:
-- Follow up politely and naturally based on the conversation.
-- Ask again for the creator’s phone number for a voice assistant to follow up.
-
-Respond strictly in the following Markdown format:
-
-## Subject
-<short subject here>
-
-## Body
-<follow-up email body here — max 100 words>
-
-Do not include any explanations or extra commentary.
-`;
-
-    const userPrompt = `
-Here is the last email we sent:
-"${previousEmailBody || '[Not Available]'}"
-
-Here is the creator's reply:
-"${creatorReply || '[No reply yet]'}"
-
-Now write:
-1. A subject line (max 10 words)
-2. A short follow-up body (100 words max)
-`;
-
-    const response = await groq.chat.completions.create({
-        model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-        messages: [
-            { role: 'system', content: systemPrompt.trim() },
-            { role: 'user', content: userPrompt.trim() },
-        ],
-        temperature: 0.6,
-    });
-
-    const content = response.choices[0].message.content;
-    logger.info('Generated follow-up email content:', content);
-    if (!content) throw new Error('No response from Groq');
-
-    const cleanedContent = content.trim();
-
-    const subjectMatch = cleanedContent.match(/## Subject\s+(.+?)\s+## Body/s);
-    const bodyMatch = cleanedContent.match(/## Body\s+([\s\S]*)/);
-
-    const rawSubject = subjectMatch?.[1].trim() ?? '';
-    const fallbackSubject = `Quick Follow-up from ${brand.brandName}`;
-    const safeSubject = rawSubject.length < 100 ? rawSubject : fallbackSubject;
-
-    const body = bodyMatch?.[1].trim() ?? '';
-
-    return { subject: previousEmailSubject || "", body };
+export interface EmailMessage {
+    /** “brand” when the brand sent it, “creator” when the creator replied */
+    sender: "brand" | "creator";
+    subject: string;
+    body: string;
 }
 
-export async function generateCallConfirmationEmail({
-    brand,
-    creator,
-    campaign,
-    previousEmailSubject,
-    previousEmailBody,
-    creatorReply,
-    preferredCallTime,
-}: {
-    brand: Brand;
-    creator: Creator;
-    campaign: Campaign;
-    previousEmailSubject: string;
-    previousEmailBody?: string;
-    creatorReply?: string;
-    preferredCallTime?: string;
-}): Promise<{ subject: string; body: string }> {
+export async function generateNextEmail({ brand, creator, campaign, history }: { brand: Brand; creator: Creator; campaign: Campaign; history: EmailMessage[]; }): Promise<{ subject: string; body: string; }> {
     const systemPrompt = `
-You're an AI assistant for the brand "${brand.brandName}".
-The creator "${creator.displayName}" has shared their phone number for the campaign "${campaign.campaignName}".
+You are an AI email‐negotiation assistant for the brand "${brand.brandName}". 
+Your job is to handle the entire email thread with creator "${creator.displayName}" regarding campaign "${campaign.campaignName}". 
 
-Write a short, warm email:
-- Acknowledge their reply and phone number.
-- Mention a call will happen soon (default: "in 2 hours", or use provided time).
-- Be warm, polite, and helpful.
-- End with an invitation to reply if they need anything else.
+Campaign details:
+- Description: ${campaign.description}
+- Platforms: ${campaign.requiredPlatforms
+            .map((p) => `${p.platform} (${p.contentType} x${p.quantity})`)
+            .join(", ")}
+- Budget: ₹${campaign.budget}
+- Timeline: ${campaign.startDate} to ${campaign.endDate}
 
-Respond in this Markdown format:
+Creator details:
+- Name: ${creator.displayName}
+- Email: ${creator.email}
+- Primary category: ${creator.category}
+- Followers: IG: ${creator.instagramFollowers}, YT: ${creator.youtubeSubscribers}
+
+Brand details:
+- Name: ${brand.brandName}
+- Email: ${brand.email}
+- Phone: ${brand.phone || "[not provided]"}
+
+Your responsibilities:
+1. Review the entire negotiation history (see the messages below, in chronological order).
+2. If the creator has not yet given a phone number or expressed clear willingness, send a friendly follow‐up asking for their phone number for a voice call. 
+3. If the creator provided their phone number in a previous email, send a polite confirmation (“Thank you, we will call you in 2 hours/minutes…”) and wrap up this email‐thread.
+4. If the creator asks for campaign pricing, respond by summarizing the budget range and suggest scheduling a call to finalize.
+5. If the creator’s reply is vague (“Hi,” “Sounds good,” etc.), send a gentle prompt to clarify or share their availability.
+6. If the negotiation is already complete (phone booked, no further follow‐ups needed), respond with “no further emails needed.”
+
+Follow this strict Markdown format for your response Subject and Body:
+**Output format (strictly in Markdown and strictly follow this format):**
 
 ## Subject
-<short subject here — reuse thread subject if needed>
+<The next email’s subject line>
 
 ## Body
-<confirmation message — max 100 words>
+<The next email’s body, max 150 words>
 
-NO extra commentary or explanation.
-  `.trim();
+**Do NOT** include any explanation beyond the subject and body.  
+`.trim();
 
-    const userPrompt = `
-Last email we sent:
-"${previousEmailBody || '[Not available]'}"
+    const chatMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
+        { role: "system", content: systemPrompt },
+    ];
 
-Creator's reply:
-"${creatorReply || '[Not available]'}"
+    for (const msg of history) {
+        const combined = `Subject: ${msg.subject}\n\n${msg.body}`;
+        if (msg.sender === "creator") {
+            chatMessages.push({ role: "user", content: combined });
+        } else {
+            chatMessages.push({ role: "assistant", content: combined });
+        }
+    }
 
-Preferred call time (if any): "${preferredCallTime || 'N/A'}"
-
-Now write the confirmation email.
-  `.trim();
 
     const response = await groq.chat.completions.create({
-        model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-        messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-        ],
+        model: "meta-llama/llama-4-maverick-17b-128e-instruct",
+        messages: chatMessages,
         temperature: 0.6,
     });
 
-    const content = response.choices[0].message.content;
-    logger.info('Generated call confirmation email content:', content);
 
-    if (!content) throw new Error('No response from Groq for call confirmation');
+    const aiContent = response.choices[0]?.message?.content || "";
+    logger.info("NegotiatorAgent: raw LLM reply:", aiContent);
 
-    const subjectMatch = content.match(/## Subject\s+(.+?)\s+## Body/s);
-    const bodyMatch = content.match(/## Body\s+([\s\S]*)/);
+    // 4) Parse the Markdown reply into subject/body.
+    const cleaned = aiContent.trim();
+    const subjectMatch = cleaned.match(/## Subject\s+(.+?)\s+## Body/s);
+    const bodyMatch = cleaned.match(/## Body\s+([\s\S]*)/);
 
-    const rawSubject = subjectMatch?.[1].trim() ?? '';
-    const fallbackSubject = previousEmailSubject || `Call Confirmation from ${brand.brandName}`;
-    const safeSubject = rawSubject.length < 100 ? rawSubject : fallbackSubject;
+    let nextSubject = subjectMatch?.[1].trim() ?? "";
+    let nextBody = bodyMatch?.[1].trim() ?? "";
 
-    const body = bodyMatch?.[1].trim() ?? '';
+    // If the model indicates no further emails, we can return empty strings or a sentinel.
+    if (/no further emails needed/i.test(nextSubject + " " + nextBody)) {
+        nextSubject = "";
+        nextBody = "No further emails needed.";
+    }
 
-    return { subject: safeSubject, body };
+    if (!nextBody) {
+        logger.warn("NegotiatorAgent: No body content generated, using fallback.");
+        nextBody = "Thank you for your response. Please let us know if you have any questions or need further information.";
+    }
+
+    //check if history has 2 or more messages
+    let reSubject = ""
+    if (history.length >= 2) {
+        reSubject = history[1].subject;
+        logger.info("NegotiatorAgent: Using second message subject for reply:", reSubject);
+    } else {
+        // If we don't have a second message, we can use the first message's subject as a fallback
+        reSubject = history[0].subject;
+        logger.info("NegotiatorAgent: Using first message subject for reply:", reSubject);
+    }
+
+    return { subject: reSubject || "", body: nextBody || "" };
 }

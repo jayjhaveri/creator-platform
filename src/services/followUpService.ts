@@ -1,9 +1,10 @@
 // followUpService.ts
 import { db } from '../config/firebase';
-import { generatePhoneRequestEmail } from '../utils/generateEmailContent';
+import { EmailMessage, generateNextEmail } from '../utils/generateEmailContent';
 import { Negotiation, Creator, Campaign, Brand, Communication } from '../types/schema';
 import { v4 as uuidv4 } from 'uuid';
 import { sendEmail } from '../utils/sendEmail';
+import logger from '../utils/logger';
 
 export const processEmailFollowUp = async (negotiationId: string) => {
     const negotiationRef = db.collection('negotiations').doc(negotiationId);
@@ -44,10 +45,28 @@ export const processEmailFollowUp = async (negotiationId: string) => {
 
     const previousEmail = lastOutboundSnap.docs[0]?.data() as Communication | undefined;
 
-    const { subject, body } = await generatePhoneRequestEmail(
-        {
-            brand, creator, campaign, previousEmailSubject: previousEmail?.subject ?? '', previousEmailBody: undefined // No previous email content provided
-        });
+    const history = await db.collection('communications')
+        .where('negotiationId', '==', negotiationId)
+        .orderBy('createdAt', 'asc')
+        .get()
+        .then(snapshot => snapshot.docs.map(doc => doc.data() as Communication));
+
+    logger.info('Negotiation history:', history);
+
+
+    const emailHistory: EmailMessage[] = history.map(comm => ({
+        sender: comm.direction === 'inbound' ? "creator" : "brand",
+        subject: comm.subject,
+        body: comm.content,
+    }));
+
+    const { subject, body } = await generateNextEmail({
+        brand,
+        creator,
+        campaign,
+        history: emailHistory,
+    });
+
 
     const brandEmailPrefix = brand.email.split('@')[0].replace(/\W/g, '');
     const fromEmail = `${brandEmailPrefix}--${negotiationId}@techable.in`;
