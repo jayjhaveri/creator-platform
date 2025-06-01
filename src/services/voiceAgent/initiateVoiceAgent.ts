@@ -172,6 +172,9 @@ export const scheduleInitiateCallViaCloudTask = async (negotiationId: string, ph
 export const startCall = async (req: Request, res: Response) => {
     try {
         const { negotiationId, phone } = req.body as any;
+        if (!negotiationId || !phone) {
+            return res.status(400).json({ error: 'Negotiation ID and phone number are required' });
+        }
 
         const voiceAgentId = await initiateVoiceAgent(negotiationId)
 
