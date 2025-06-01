@@ -21,7 +21,7 @@ export const pollTranscription = async (req: Request, res: Response) => {
 
         let updated = false;
         for (let i = 0; i < 10; i++) {
-            const response = await elevenLabs.get(`/v1/convai/conversations/${conversationId}`);
+            const response = await elevenLabs.get(`/conversations/${conversationId}`);
             const body = response.data;
 
             if (body.status === 'done') {
@@ -43,7 +43,7 @@ export const pollTranscription = async (req: Request, res: Response) => {
                     const audioResponse = await fetch(`https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`, {
                         method: "GET",
                         headers: {
-                            "Xi-Api-Key": process.env.ELEVEN_LABS_API_KEY!,
+                            "Xi-Api-Key": process.env.ELEVENLABS_API_KEY!,
                         },
                     });
 

@@ -11,6 +11,7 @@ import { makeOutboundCall } from '../elevenLabs/makeCall';
 import { Request, Response } from 'express';
 import { updateVoiceAgent } from '../elevenLabs/updateVoiceAgent';
 import logger from '../../utils/logger';
+import { scheduleTranscriptionPollingTask } from './scheduleTranscriptionPolling';
 
 export const agentPhoneNumberId = "phnum_01jwgymzjafwfstkb80x07gmej";
 
@@ -196,6 +197,14 @@ export const startCall = async (req: Request, res: Response) => {
         }
 
         try {
+
+            const negotiationDoc = await db.collection('negotiations').doc(negotiationId).get();
+            if (!negotiationDoc.exists) {
+                console.error('Negotiation not found:', negotiationId);
+                return res.status(404).json({ error: 'Negotiation not found' });
+            }
+            const negotiation = negotiationDoc.data() as Negotiation;
+
             const voiceCommunication: VoiceCommunication = {
                 voiceCommunicationId: uuidv4(),
                 negotiationId,
@@ -205,8 +214,8 @@ export const startCall = async (req: Request, res: Response) => {
                 phone,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                brandId: '',
-                creatorId: '',
+                brandId: negotiation.brandId,
+                creatorId: negotiation.creatorId,
                 callSid: '',
                 status: 'initiated',
                 hasAudio: false,
@@ -219,6 +228,8 @@ export const startCall = async (req: Request, res: Response) => {
             };
 
             await saveVoiceCommunication(voiceCommunication);
+
+            await scheduleTranscriptionPollingTask(voiceCommunication.voiceCommunicationId);
         } catch (error) {
             console.error('Failed to save voice communication:', error);
         }
