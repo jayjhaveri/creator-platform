@@ -91,4 +91,4 @@ Pull requests welcome! For major changes, open an issue first to discuss what yo
 
 ## License
 
-[ISC](LICENSE)
+[MIT](LICENSE)
