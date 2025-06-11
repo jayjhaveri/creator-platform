@@ -19,6 +19,8 @@ import { requestLogger } from './middleware/requestLogger';
 import taskRoutes from './routes/taskRoutes';
 import initiateCall from './routes/initiateCall';
 
+import firestoreWebhook from './routes/firestoreWebhook';
+
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -44,7 +46,10 @@ app.use('/inbound-email', inboundEmailRoutes);
 
 app.use('/tasks', taskRoutes);
 
-app.use('/api/initiateCall', initiateCall)
+app.use('/api/initiateCall', initiateCall);
+
+// Add this just before your catch-all route
+app.use('/webhooks/firestore', firestoreWebhook);
 
 app.use('/', (req, res) => {
     res.status(200).send('Welcome to the Creator Platform API! Use /api/docs for API documentation.');

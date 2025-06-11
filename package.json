@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@genkit-ai/googleai": "^1.12.0",
     "@google-cloud/tasks": "^6.1.0",
     "@sendgrid/mail": "^8.1.5",
     "axios": "^1.9.0",
@@ -22,6 +23,7 @@
     "express": "^5.1.0",
     "express-formidable": "^1.2.0",
     "firebase-admin": "^13.4.0",
+    "genkit": "^1.12.0",
     "groq-sdk": "^0.23.0",
     "helmet": "^8.1.0",
     "mailparser": "^3.7.3",

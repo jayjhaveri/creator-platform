@@ -7,15 +7,14 @@
 
 import express from 'express';
 import { verifyFirebaseToken } from '../middleware/verifyToken';
-import { db } from '../config/firebase';
 import { asyncHandler } from '../utils/asyncHandler';
-import { Brand } from '../types/schema';
 import {
     createBrand,
     getBrandById,
     updateBrand,
     deleteBrand,
-    listBrands
+    listBrands,
+    searchBrandsByVector,
 } from '../controllers/brandsController';
 
 /**
@@ -70,6 +69,7 @@ router.post(
     verifyFirebaseToken,
     asyncHandler(createBrand)
 );
+
 
 /**
  * @swagger
@@ -160,6 +160,39 @@ router.get(
     '/',
     verifyFirebaseToken,
     asyncHandler(listBrands)
+);
+
+/**
+ * @swagger
+ * /api/brands/search:
+ *   post:
+ *     summary: Search brands by semantic similarity
+ *     tags: [Brands]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               query:
+ *                 type: string
+ *                 example: "AI-focused marketing startup"
+ *     responses:
+ *       200:
+ *         description: Matching brands
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Brand'
+ */
+router.post(
+    '/search',
+    asyncHandler(searchBrandsByVector)
 );
 
 export default router;
