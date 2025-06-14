@@ -188,7 +188,7 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
 class SessionAgentExecutor extends AgentExecutor {
     constructor(private sessionId: string, agent: any, private phone: string, tools: any[],
         private memoryAgent: BufferMemory) {
-        super({ agent, tools, verbose: true, memory: memoryAgent });
+        super({ agent, tools, memory: memoryAgent });
     }
 
     async invoke(input: { input: string }, options?: any) {

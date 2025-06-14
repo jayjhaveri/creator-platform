@@ -3,16 +3,22 @@ import { db } from '../config/firebase';
 import { getOrchestratorAgent } from '../agents/orchestratorAgent';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { sendWhatsAppReply } from '../utils/whatsapp';
+import logger from '../utils/logger';
 
 export async function whatsappWebhookHandler(req: Request, res: Response) {
     try {
+        logger.info('Received a request on WhatsApp webhook', { method: req.method });
+
         if (req.method !== 'POST') {
+            logger.warn('Invalid request method', { method: req.method });
             return res.status(405).send('Only POST requests are allowed');
         }
 
         const data = req.body;
+        logger.info('Request body received', { body: data });
 
         if (!data.messageId || !data.content || !data.from) {
+            logger.error('Missing required fields in request body', { body: data });
             return res.status(400).send('Missing required fields');
         }
 
@@ -22,7 +28,7 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
         const sessionId = phone;
         const userId = phone;
 
-        // 1. Save raw WhatsApp message
+        logger.info('Saving raw WhatsApp message', { messageId: data.messageId, from: phone });
         await db.collection('whatsapp_messages').add({
             messageId: data.messageId,
             from: phone,
@@ -39,7 +45,7 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
             raw: data,
         });
 
-        // 2. Upsert into userChats
+        logger.info('Upserting into userChats', { sessionId });
         const chatRef = db.collection('userChats').doc(sessionId);
         const chatDoc = await chatRef.get();
 
@@ -50,11 +56,13 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
         };
 
         if (chatDoc.exists) {
+            logger.info('Updating existing chat document', { sessionId });
             await chatRef.update({
                 messages: FieldValue.arrayUnion(messageEntry),
                 updatedAt: now,
             });
         } else {
+            logger.info('Creating new chat document', { sessionId });
             await chatRef.set({
                 sessionId,
                 userId,
@@ -64,28 +72,30 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
             });
         }
 
-        // 3. Run orchestrator agent to get AI response
+        logger.info('Invoking orchestrator agent', { sessionId, input: text });
         const agent = await getOrchestratorAgent(sessionId, phone);
         const result = await agent.invoke({ input: text });
 
+        logger.info('Received AI response', { output: result.output });
         const aiMessage = {
             role: 'ai',
             content: result.output,
             timestamp: new Date().toISOString(),
         };
 
-        // 4. Save AI reply to userChats
+        logger.info('Saving AI reply to userChats', { sessionId });
         await chatRef.update({
             messages: FieldValue.arrayUnion(aiMessage),
             updatedAt: new Date().toISOString(),
         });
 
-        // 5. Optionally send WhatsApp reply (if integrated with an API like 11za)
+        logger.info('Sending WhatsApp reply', { phone, reply: result.output });
         await sendWhatsAppReply(phone, result.output);
 
+        logger.info('Successfully processed and replied to the message', { messageId: data.messageId });
         return res.status(200).send('Processed and replied.');
     } catch (err) {
-        console.error('WhatsApp Webhook Error:', err);
+        logger.error('WhatsApp Webhook Error', { error: err });
         return res.status(500).send('Internal server error');
     }
 }
