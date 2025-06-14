@@ -19,7 +19,7 @@ import { requestLogger } from './middleware/requestLogger';
 import taskRoutes from './routes/taskRoutes';
 import initiateCall from './routes/initiateCall';
 
-import firestoreWebhook from './routes/firestoreWebhook';
+import firestoreWebhook from './routes/webhooks';
 import { whatsappWebhookHandler } from './webhooks/whatsappWebhook';
 import { asyncHandler } from './utils/asyncHandler';
 
@@ -51,9 +51,7 @@ app.use('/tasks', taskRoutes);
 app.use('/api/initiateCall', initiateCall);
 
 // Add this just before your catch-all route
-app.use('/webhooks/firestore', firestoreWebhook);
-
-app.post('/webhooks/whatsapp', asyncHandler(whatsappWebhookHandler));
+app.use('/webhooks', firestoreWebhook);
 
 
 app.use('/', (req, res) => {
