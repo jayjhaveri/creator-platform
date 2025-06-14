@@ -20,6 +20,8 @@ import taskRoutes from './routes/taskRoutes';
 import initiateCall from './routes/initiateCall';
 
 import firestoreWebhook from './routes/firestoreWebhook';
+import { whatsappWebhookHandler } from './webhooks/whatsappWebhook';
+import { asyncHandler } from './utils/asyncHandler';
 
 
 const app = express();
@@ -50,6 +52,9 @@ app.use('/api/initiateCall', initiateCall);
 
 // Add this just before your catch-all route
 app.use('/webhooks/firestore', firestoreWebhook);
+
+app.post('/webhooks/whatsapp', asyncHandler(whatsappWebhookHandler));
+
 
 app.use('/', (req, res) => {
     res.status(200).send('Welcome to the Creator Platform API! Use /api/docs for API documentation.');

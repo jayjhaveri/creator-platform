@@ -65,14 +65,21 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
         }),
         new DynamicStructuredTool({
             name: 'createCampaign',
-            description: 'Create a new campaign. Input: { campaignName, description, budget, targetAudience, startDate, endDate }',
+            description: 'Create a new campaign. Input: { campaignName, description, budget, targetAudience, startDate, endDate, requiredPlatforms }',
             schema: z.object({
                 campaignName: z.string(),
                 description: z.string(),
                 budget: z.number(),
                 targetAudience: z.string(),
                 startDate: z.string(),
-                endDate: z.string()
+                endDate: z.string(),
+                requiredPlatforms: z.array(
+                    z.object({
+                        platform: z.enum(['instagram', 'youtube', 'tiktok', 'facebook', 'twitter']),
+                        contentType: z.enum(['post', 'story', 'reel', 'video', 'live']),
+                        quantity: z.number().min(1),
+                    })
+                )
             }),
             func: async (args) => {
                 const brandId = await SessionStateManager.get(sessionId, 'brandId');
