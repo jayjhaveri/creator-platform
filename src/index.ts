@@ -20,8 +20,6 @@ import taskRoutes from './routes/taskRoutes';
 import initiateCall from './routes/initiateCall';
 
 import firestoreWebhook from './routes/webhooks';
-import { whatsappWebhookHandler } from './webhooks/whatsappWebhook';
-import { asyncHandler } from './utils/asyncHandler';
 
 
 const app = express();
