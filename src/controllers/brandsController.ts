@@ -3,7 +3,7 @@ import * as brandService from '../services/brandService';
 import { Brand } from '../types/schema';
 import { db } from '../config/firebase';
 import logger from '../utils/logger';
-import { generateEmbedding } from '../services/embeddingService';
+import { generateEmbeddingsForChunks } from '../services/embeddingService';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export const createBrand = async (req: Request, res: Response) => {
@@ -70,23 +70,24 @@ export const searchBrandsByVector = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Missing or invalid `query` in request body' });
         }
 
-        console.log('🔍 Generating embedding for query:', query);
-        const embedding = await generateEmbedding(query);
+        logger.info('🔍 Generating embedding for query:', query);
+        const [embedding] = await generateEmbeddingsForChunks(query);
 
         if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
-            console.warn('⚠️ Invalid or empty embedding generated');
+            logger.warn('⚠️ Invalid or empty embedding generated');
             return res.status(500).json({ error: 'Failed to generate embedding' });
         }
 
-        console.log(`✅ Embedding generated (length: ${embedding.length})`);
-        console.log('📁 Executing vector search in Firestore...');
+        logger.info(`✅ Embedding generated (length: ${embedding.length})`);
+        logger.info('📁 Executing vector search in Firestore chunks...');
 
         const snapshot = await db
-            .collection('brands')
+            .collection('chunks')
+            .where('type', '==', 'brands')
             .findNearest({
                 vectorField: 'vectorEmbedding',
-                queryVector: embedding,
-                limit: 5, // you can adjust this as needed
+                queryVector: embedding.embedding,
+                limit: 10,
                 distanceMeasure: 'COSINE',
                 distanceResultField: 'similarityScore',
                 distanceThreshold: 0.51
@@ -94,24 +95,32 @@ export const searchBrandsByVector = async (req: Request, res: Response) => {
             .get();
 
         if (snapshot.empty) {
-            console.log('⚠️ No matching documents found for query:', query);
+            logger.info('⚠️ No matching chunks found for query:', query);
             return res.status(200).json({ results: [] });
         }
 
-        const results = snapshot.docs.map((doc) => {
+        const resultsMap = new Map();
+
+        snapshot.docs.forEach((doc) => {
             const data = doc.data();
-            const similarityScore = doc.get('similarityScore');
-            console.log(`📄 Match: ${doc.id} | Similarity: ${similarityScore?.toFixed(4)}`);
-            return {
-                id: doc.id,
-                similarityScore,
-                ...data,
-            };
+            const sourceId = data.sourceId;
+            const existing = resultsMap.get(sourceId);
+
+            if (!existing || data.similarityScore > existing.similarityScore) {
+                resultsMap.set(sourceId, {
+                    id: sourceId,
+                    similarityScore: data.similarityScore,
+                    chunkId: doc.id,
+                    chunkContent: data.chunk,
+                    metadata: data,
+                });
+            }
         });
 
+        const results = Array.from(resultsMap.values());
         res.status(200).json({ results });
     } catch (error) {
-        console.error('🔥 Error in vector search:', error);
+        logger.error('🔥 Error in vector search:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

@@ -1,36 +1,67 @@
 // src/services/embeddingService.ts
 import { googleAI } from '@genkit-ai/googleai';
 import { genkit } from 'genkit';
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
+import logger from '../utils/logger';
 
 const ai = genkit({
     plugins: [googleAI()],
 });
 
-export async function generateEmbedding(text: string): Promise<number[]> {
-    console.log('🧠 generateEmbedding() called');
-    console.log('📥 Input text:', text);
+export interface EmbeddingChunk {
+    embedding: number[];
+    chunkText: string;
+    chunkIndex: number;
+}
 
-    try {
-        const embeddings = await ai.embed({
-            embedder: googleAI.embedder('text-embedding-004'),
-            content: text,
-            options: {
-                outputDimensionality: 768,
-                taskType: "RETRIEVAL_QUERY"
+async function splitTextWithLangChain(text: string, chunkSize: number, chunkOverlap: number): Promise<string[]> {
+    const splitter = new RecursiveCharacterTextSplitter({
+        chunkSize,
+        chunkOverlap,
+    });
+
+    const documents = await splitter.createDocuments([text]);
+    return documents.map(doc => doc.pageContent);
+}
+
+export async function generateEmbeddingsForChunks(text: string): Promise<EmbeddingChunk[]> {
+    logger.info('🧠 generateEmbeddingsForChunks() called');
+    logger.info('📥 Input text length:', text.length);
+
+    const chunkSize = 500;
+    const chunkOverlap = 100;
+
+    const chunks = await splitTextWithLangChain(text, chunkSize, chunkOverlap);
+    const results: EmbeddingChunk[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        logger.info(`📦 Embedding chunk ${i + 1}/${chunks.length}: ${chunk.slice(0, 80)} ...`);
+
+        try {
+            const embeddings = await ai.embed({
+                embedder: googleAI.embedder('text-embedding-004'),
+                content: chunk,
+                options: {
+                    outputDimensionality: 768,
+                    taskType: "RETRIEVAL_DOCUMENT"
+                }
+            });
+
+            if (embeddings?.[0]?.embedding) {
+                results.push({
+                    embedding: embeddings[0].embedding,
+                    chunkText: chunk,
+                    chunkIndex: i
+                });
+            } else {
+                logger.warn(`❌ No embedding returned for chunk ${i}`);
             }
-        });
-
-        // console.log('📦 Raw embedding response:', JSON.stringify(embeddings, null, 2));
-
-        if (!embeddings?.[0]?.embedding || !Array.isArray(embeddings[0].embedding)) {
-            console.error('❌ Failed to generate a valid embedding from the response');
-            throw new Error('Failed to generate embedding');
+        } catch (err) {
+            logger.error(`🔥 Error embedding chunk ${i}:`, err);
         }
-
-        console.log('✅ Embedding generated successfully, length:', embeddings[0].embedding.length);
-        return embeddings[0].embedding;
-    } catch (err) {
-        console.error('🔥 Error while generating embedding:', err);
-        throw err;
     }
+
+    logger.info(`✅ Generated ${results.length} embeddings out of ${chunks.length} chunks`);
+    return results;
 }

@@ -20,6 +20,8 @@ export interface Brand {
 export interface Creator {
   creatorId: string = ''; // Nullable for new creators
   displayName: string;
+  bio: string?;
+  profilePictureUrl: string;
   email: string;
   phone: string;
   instagramHandle: string;
@@ -28,12 +30,7 @@ export interface Creator {
   youtubeSubscribers: number;
   category: 'lifestyle' | 'tech' | 'fashion' | 'fitness' | 'food' | 'travel' | 'gaming' | 'beauty' | 'education' | 'other';
   averageEngagementRate: number;
-  baseRate: number;
-  isAvailable: boolean;
   preferredContactMethod: 'email' | 'phone' | 'instagram' | 'youtube';
-  hasManager: boolean;
-  managerEmail: string;
-  managerPhone: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -184,4 +181,33 @@ export interface VoiceTranscriptMessage {
   role: 'user' | 'agent';
   message: string;
   time_in_call_secs: number;
+}
+
+export interface Chunk {
+  chunkId: string; // Firestore doc ID
+  parentId: string; // ID of the brand, creator, campaign, etc.
+  parentCollection: 'brands' | 'creators' | 'campaigns' | 'communications' | 'voiceCommunications'; // source collection
+  chunkText: string; // the actual paragraph or section
+  chunkIndex: number; // position of the chunk in the original document (e.g. 0, 1, 2)
+  vector: number[]; // 768-dim or 2048-dim embedding
+  sourceDocId?: string; // optional: source PDF, email, or file ID if chunked from uploaded document
+  language?: string; // e.g. 'en', 'hi', etc. for multilingual support
+  tags?: string[]; // optional categorization tags like ['pricing', 'target', 'brief']
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+}
+
+// Collection: userChats
+export interface UserChat {
+  sessionId: string;         // Unique per user-chat session (can be WhatsApp thread ID, etc.)
+  userId: string;            // Firebase UID or brandId
+  messages: Message[];       // Array of messages
+  createdAt: string;         // ISO timestamp
+  updatedAt: string;         // For sorting or purging
+}
+
+export interface Message {
+  role: 'human' | 'ai';
+  content: string;
+  timestamp: string;         // ISO timestamp
 }

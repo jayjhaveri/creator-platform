@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { Firestore } from '@google-cloud/firestore';
-import { generateEmbedding } from '../services/embeddingService';
-import { upsertToVectorStore } from '../services/vectorStore';
+import { generateEmbeddingsForChunks } from '../services/embeddingService';
+import { upsertChunksToVectorStore } from '../services/vectorStore';
 
 const firestore = new Firestore();
 
@@ -11,16 +11,7 @@ export const handleFirestoreEvent = async (req: Request, res: Response) => {
     try {
         const write = req.body?.protoPayload?.request?.writes?.[0];
         const docPath = write?.update?.name;
-
         const updateMask = write?.updateMask?.fieldPaths || [];
-
-        const relevantFields = ['brandName', 'industry', 'description'];
-        const hasRelevantChange = updateMask.some((field: string) => relevantFields.includes(field));
-
-        if (!hasRelevantChange) {
-            console.log('✅ No changes in embedding-relevant fields — skipping vector update.');
-            return res.status(204).send('No relevant changes — skipping embedding update.');
-        }
 
         if (!docPath) {
             console.warn('⚠️ Could not extract document path from event:', JSON.stringify(req.body, null, 2));
@@ -28,35 +19,71 @@ export const handleFirestoreEvent = async (req: Request, res: Response) => {
         }
 
         const relativePath = docPath.split('/documents/')[1]; // e.g., brands/abc123
-        const docId = relativePath.split('/').pop() || 'unknown';
+        const [collectionName, docId] = relativePath.split('/');
 
         console.log(`📄 Firestore doc path: ${docPath}`);
+        console.log(`📁 Collection: ${collectionName}`);
         console.log(`🆔 Document ID: ${docId}`);
 
         const docSnapshot = await firestore.doc(relativePath).get();
-
         if (!docSnapshot.exists) {
             console.warn(`⚠️ Document not found in Firestore: ${relativePath}`);
             return res.status(404).send('Document not found');
         }
 
         const fields = docSnapshot.data()!;
-        const embeddingText = `${fields.brandName || ''} ${fields.industry || ''} ${fields.description || ''}`;
-        console.log('🧠 Embedding Text:', embeddingText);
 
-        const embedding = await generateEmbedding(embeddingText);
-        console.log('✅ Embedding generated with length:', embedding.length);
+        // Decide embedding strategy based on collection
+        let embeddingText = '';
+        let relevantFields: string[] = [];
 
-        console.log('💾 Upserting to vector store...');
-        await upsertToVectorStore({
-            id: docId,
-            vector: embedding,
-            metadata: {
-                type: 'brand',
-                brandName: fields.brandName,
-                industry: fields.industry,
-            }
+        switch (collectionName) {
+            case 'brands':
+                relevantFields = ['brandName', 'industry', 'description'];
+                embeddingText = `${fields.brandName || ''} ${fields.industry || ''} ${fields.description || ''}`;
+                break;
+            case 'creators':
+                relevantFields = ['displayName', 'bio', 'category'];
+                embeddingText = `${fields.displayName || ''} ${fields.bio || ''} ${fields.category || ''}`;
+                break;
+            case 'campaigns':
+                relevantFields = ['campaignName', 'description', 'targetAudience'];
+                embeddingText = `${fields.campaignName || ''} ${fields.description || ''} ${fields.targetAudience || ''}`;
+                break;
+            case 'communications':
+                relevantFields = ['subject', 'content'];
+                embeddingText = `${fields.subject || ''} ${fields.content || ''}`;
+                break;
+            case 'voiceCommunications':
+                relevantFields = ['transcript'];
+                embeddingText = (fields.transcript || []).map((t: any) => t.message).join(' ');
+                break;
+            default:
+                console.log(`⚠️ Unhandled collection: ${collectionName}`);
+                return res.status(204).send('No relevant collection handler');
+        }
+
+        const hasRelevantChange = updateMask.some((field: string) => relevantFields.includes(field));
+        if (!hasRelevantChange) {
+            console.log('✅ No changes in embedding-relevant fields — skipping vector update.');
+            return res.status(204).send('No relevant changes — skipping embedding update.');
+        }
+
+        console.log('🧠 Generating chunk embeddings...');
+        const chunks = await generateEmbeddingsForChunks(embeddingText);
+
+        await upsertChunksToVectorStore({
+            chunks: chunks.map(chunk => ({
+                vector: chunk.embedding,
+                metadata: {
+                    parrentCollection: collectionName,
+                    sourceId: docId,
+                    chunkIndex: chunk.chunkIndex,
+                    chunkText: chunk.chunkText,
+                }
+            }))
         });
+
 
         console.log('🎯 Vector successfully stored for:', docId);
         return res.status(200).send('Vector stored');

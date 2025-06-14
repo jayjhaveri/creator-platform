@@ -27,14 +27,11 @@ export const defaultCreator = (): Creator => ({
     youtubeSubscribers: 0,
     category: 'other',
     averageEngagementRate: 0,
-    baseRate: 0,
-    isAvailable: false,
     preferredContactMethod: 'email',
-    hasManager: false,
-    managerEmail: '',
-    managerPhone: '',
     createdAt: '',
     updatedAt: '',
+    bio: '',
+    profilePictureUrl: ''
 });
 
 export const defaultCampaignPlatformRequirement = (): CampaignPlatformRequirement => ({
