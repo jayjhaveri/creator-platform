@@ -8,7 +8,7 @@ export async function sendWhatsAppReply(phone: string, message: string) {
     try {
         const payload = {
             sendto: phone,
-            authToken: process.env.WHATSAPP_AUTH_TOKEN,
+            authToken: `${process.env.WHATSAPP_AUTH_TOKEN}`,
             originWebsite: 'https://techable.in',
             contentType: 'text',
             text: message,
