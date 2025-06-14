@@ -45,49 +45,11 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
             raw: data,
         });
 
-        logger.info('Upserting into userChats', { sessionId });
-        const chatRef = db.collection('userChats').doc(sessionId);
-        const chatDoc = await chatRef.get();
-
-        const messageEntry = {
-            role: 'human',
-            content: text,
-            timestamp: now,
-        };
-
-        if (chatDoc.exists) {
-            logger.info('Updating existing chat document', { sessionId });
-            await chatRef.update({
-                messages: FieldValue.arrayUnion(messageEntry),
-                updatedAt: now,
-            });
-        } else {
-            logger.info('Creating new chat document', { sessionId });
-            await chatRef.set({
-                sessionId,
-                userId,
-                messages: [messageEntry],
-                createdAt: now,
-                updatedAt: now,
-            });
-        }
-
         logger.info('Invoking orchestrator agent', { sessionId, input: text });
         const agent = await getOrchestratorAgent(sessionId, phone);
         const result = await agent.invoke({ input: text });
 
         logger.info('Received AI response', { output: result.output });
-        const aiMessage = {
-            role: 'ai',
-            content: result.output,
-            timestamp: new Date().toISOString(),
-        };
-
-        logger.info('Saving AI reply to userChats', { sessionId });
-        await chatRef.update({
-            messages: FieldValue.arrayUnion(aiMessage),
-            updatedAt: new Date().toISOString(),
-        });
 
         logger.info('Sending WhatsApp reply', { phone, reply: result.output });
         await sendWhatsAppReply(phone, result.output);

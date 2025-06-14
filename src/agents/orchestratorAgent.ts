@@ -187,16 +187,13 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
 
 class SessionAgentExecutor extends AgentExecutor {
     constructor(private sessionId: string, agent: any, private phone: string, tools: any[],
-        private memoryAgent: BufferMemory) {
-        super({ agent, tools, memory: memoryAgent });
+        memoryAgent: BufferMemory) {
+        super({ agent, tools, memory: memoryAgent, verbose: true });
     }
 
     async invoke(input: { input: string }, options?: any) {
         const brandId = await SessionStateManager.get(this.sessionId, 'brandId') || this.phone;
         await saveUserMessage(this.sessionId, input.input, brandId);
-
-
-
 
         const result = await super.invoke(input, options);
         logger.info(`Agent invoked with input: ${input.input}`);
