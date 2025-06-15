@@ -66,3 +66,21 @@ export async function saveToolLog(sessionId: string, toolName: string, result: a
         createdAt: new Date().toISOString(),
     });
 }
+
+export async function getToolLogs(sessionId: string): Promise<{
+    toolName: string;
+    result: any;
+    createdAt: string;
+}[]> {
+    const snapshot = await db
+        .collection(TOOL_LOG_COLLECTION)
+        .where('sessionId', '==', sessionId)
+        .orderBy('createdAt', 'asc')
+        .get();
+
+    return snapshot.docs.map(doc => doc.data() as {
+        toolName: string;
+        result: any;
+        createdAt: string;
+    });
+}

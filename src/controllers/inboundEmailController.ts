@@ -10,6 +10,7 @@ import logger from '../utils/logger';
 import { parseOneAddress } from 'email-addresses';
 import { init } from 'groq-sdk/_shims';
 import { initiateVoiceAgent, scheduleInitiateCallViaCloudTask } from '../services/voiceAgent/initiateVoiceAgent';
+import { sendWhatsAppReply } from '../utils/whatsapp';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
@@ -66,14 +67,18 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
 
         // Optional: verify the negotiation exists and matches the creator
         const negotiationDoc = await db.collection('negotiations').doc(negotiationId).get();
-        if (!negotiationDoc.exists) return res.status(404).send('Negotiation not found');
-
+        if (!negotiationDoc.exists) {
+            logger.warn(`Negotiation with ID ${negotiationId} not found`);
+            return res.status(404).send('Negotiation not found');
+        }
         const negotiation = negotiationDoc.data() as Negotiation;
         if (!negotiation || !negotiation.creatorId) {
+            logger.warn(`Negotiation data incomplete for ID ${negotiationId}`);
             return res.status(404).send('Negotiation data incomplete');
         }
         const creatorDoc = await db.collection('creators').doc(negotiation.creatorId).get();
         if (!creatorDoc.exists || creatorDoc.data()?.email !== creatorEmail) {
+            logger.warn(`Creator with ID ${negotiation.creatorId} not found or email mismatch for negotiation ${negotiationId}`);
             return res.status(403).send('Creator mismatch');
         }
 
@@ -102,10 +107,19 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
         await db.collection('communications').doc(communicationId).set(communication);
 
         // Run LLM analysis to determine next steps
-        const brandDoc = await db.collection('brands').doc(negotiation.brandId).get();
-        const brand = brandDoc.data() as Brand;
+        const brandDoc = await db.collection('brands').where("brandId", "==", negotiation.brandId).limit(1).get();
+
+        if (brandDoc.empty) {
+            logger.warn(`Brand with ID ${negotiation.brandId} not found for negotiation ${negotiationId}`);
+            return res.status(404).send('Brand not found');
+        }
+        const brandId = brandDoc.docs[0].id;
+        logger.info('Brand ID found:', brandId);
+
+        const brand = brandDoc.docs[0].data() as Brand;
 
         if (!brand) {
+            logger.warn(`Brand with ID ${negotiation.brandId} not found for negotiation ${negotiationId}`);
             return res.status(404).send('Brand not found');
         }
 
@@ -127,7 +141,10 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
 
         // escalate but try again by asking for phone
         const campaignDoc = await db.collection('campaigns').doc(negotiation.campaignId).get();
-        if (!campaignDoc.exists) return res.status(404).send('Campaign not found');
+        if (!campaignDoc.exists) {
+            logger.warn(`Campaign with ID ${negotiation.campaignId} not found for negotiation ${negotiationId}`);
+            return res.status(404).send('Campaign not found');
+        }
         const campaign = campaignDoc.data() as Campaign;
 
         //create EmailMessage array from all communications with negotiationId
@@ -213,6 +230,29 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
             status: analysis.action,
             updatedAt: now,
         });
+
+        // Format WhatsApp notification message
+        const whatsappMessage = `
+📨 *New Creator Reply Received*
+
+👤 *Creator*: ${creator.displayName || creator.creatorId}
+📧 *Email*: ${creator.email}
+📢 *Campaign*: ${campaign.campaignName}
+📝 *Reply*:
+${text?.slice(0, 400) || '[No content]'}
+
+💡 *AI Notes*: ${analysis.notes}
+
+📊 *Track Campaign Progress*:
+https://influenzer-flow-dashboard.lovable.app/campaigns/${campaign.campaignId}
+`.trim();
+
+        // Send WhatsApp message to the brand's phone
+        if (brand.phone) {
+            await sendWhatsAppReply(brand.phone, whatsappMessage);
+        } else {
+            logger.warn(`Brand ${brand.brandId} does not have a phone number to send WhatsApp notification`);
+        }
 
         res.status(200).send('Reply logged');
     } catch (err) {

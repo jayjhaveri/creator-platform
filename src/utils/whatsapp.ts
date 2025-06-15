@@ -2,9 +2,6 @@ import axios from 'axios';
 import logger from './logger';
 
 export async function sendWhatsAppReply(phone: string, message: string) {
-
-    logger.info('Env keys:', Object.keys(process.env));
-
     if (!process.env.WHATSAPP_AUTH_TOKEN) {
         logger.error('WhatsApp Auth Token is not set in environment variables');
         return;

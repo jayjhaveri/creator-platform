@@ -10,7 +10,6 @@ export interface Brand {
   industry: string;
   description?: string; // Optional field for additional brand info
   companySize: 'startup' | 'small' | 'medium' | 'large' | 'enterprise';
-  totalBudget: number | null; // Nullable for new brands
   isActive: boolean;
   defaultVoiceAgentId?: string; // Reference to the default agent in voiceAgents collection
   createdAt: string;
@@ -185,7 +184,7 @@ export interface VoiceTranscriptMessage {
 
 export interface Chunk {
   chunkId: string; // Firestore doc ID
-  parentId: string; // ID of the brand, creator, campaign, etc.
+  sourceId: string; // ID of the brand, creator, campaign, etc.
   parentCollection: 'brands' | 'creators' | 'campaigns' | 'communications' | 'voiceCommunications'; // source collection
   chunkText: string; // the actual paragraph or section
   chunkIndex: number; // position of the chunk in the original document (e.g. 0, 1, 2)
@@ -210,4 +209,15 @@ export interface Message {
   role: 'human' | 'ai';
   content: string;
   timestamp: string;         // ISO timestamp
+}
+
+export interface CreatorAssignment {
+  id?: string;
+  userId: string;
+  creatorId: string;
+  campaignIds: string[];
+  phoneDiscovered: boolean;
+  phone?: string;
+  createdAt: string;
+  updatedAt: string;
 }

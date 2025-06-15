@@ -20,11 +20,12 @@ export const initiateVoiceAgent = async (negotiationId: string): Promise<string>
     if (!negotiationDoc.exists) throw new Error('Negotiation not found');
     const negotiation = negotiationDoc.data() as Negotiation;
 
-    const brandDoc = await db.collection('brands').doc(negotiation.brandId).get();
+    const brandDocSnap = await db.collection('brands').where('brandId', '==', negotiation.brandId).limit(1).get();
+    const brandDoc = !brandDocSnap.empty ? brandDocSnap.docs[0] : null;
     const campaignDoc = await db.collection('campaigns').doc(negotiation.campaignId).get();
     const creatorDoc = await db.collection('creators').doc(negotiation.creatorId).get();
 
-    if (!brandDoc.exists || !campaignDoc.exists || !creatorDoc.exists)
+    if (!brandDoc || !brandDoc.exists || !campaignDoc.exists || !creatorDoc.exists)
         throw new Error('Required data not found');
 
     const brand = brandDoc.data() as Brand;
@@ -250,6 +251,61 @@ export const saveVoiceCommunication = async (doc: VoiceCommunication): Promise<v
         logger.error('Failed to save voice communication', err);
         throw err;
     }
+};
+
+export const startCallInternal = async (negotiationId: string, phone: string) => {
+    if (!negotiationId || !phone) {
+        throw new Error('Negotiation ID and phone number are required');
+    }
+
+    const voiceAgentId = await initiateVoiceAgent(negotiationId);
+
+    const voiceAgentDoc = await db.collection('voiceAgents').doc(voiceAgentId).get();
+    if (!voiceAgentDoc.exists) throw new Error('Voice agent not found');
+    const voiceAgent = voiceAgentDoc.data();
+    if (!voiceAgent) throw new Error('Voice agent data not found');
+
+    const makeCallResponse = await makeOutboundCall({
+        agent_id: voiceAgent.agentId,
+        agent_phone_number_id: voiceAgent.agentPhoneNumberId,
+        to_number: phone,
+    });
+
+    if (!makeCallResponse.success) {
+        console.error('Failed to make outbound call:', makeCallResponse.message);
+        throw new Error('Failed to initiate call');
+    }
+
+    const negotiationDoc = await db.collection('negotiations').doc(negotiationId).get();
+    if (!negotiationDoc.exists) throw new Error('Negotiation not found');
+    const negotiation = negotiationDoc.data() as Negotiation;
+
+    const voiceCommunication: VoiceCommunication = {
+        voiceCommunicationId: uuidv4(),
+        negotiationId,
+        agentId: voiceAgent.agentId,
+        voiceAgentId,
+        conversationId: makeCallResponse.conversation_id,
+        phone,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        brandId: negotiation.brandId,
+        creatorId: negotiation.creatorId,
+        callSid: '',
+        status: 'initiated',
+        hasAudio: false,
+        hasUserAudio: false,
+        hasResponseAudio: false,
+        startTimeUnixSecs: 0,
+        callDurationSecs: 0,
+        transcript: [],
+        rawPayload: {}
+    };
+
+    await saveVoiceCommunication(voiceCommunication);
+    await scheduleTranscriptionPollingTask(voiceCommunication.voiceCommunicationId);
+
+    return voiceAgentId;
 };
 
 

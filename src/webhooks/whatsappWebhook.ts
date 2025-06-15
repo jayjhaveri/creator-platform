@@ -47,11 +47,24 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
 
         logger.info('Invoking orchestrator agent', { sessionId, input: text });
         const agent = await getOrchestratorAgent(sessionId, phone);
-        const result = await agent.invoke({ input: text });
+        let result = await agent.invoke({ input: text });
 
         logger.info('Received AI response', { output: result.output });
 
         logger.info('Sending WhatsApp reply', { phone, reply: result.output });
+
+        //if result.output is empty, try again with the agent
+        if (!result.output || result.output.trim() === '') {
+            logger.warn('Empty AI response, retrying with agent', { sessionId, input: text });
+            result = await agent.invoke({ input: text });
+            if (!result.output || result.output.trim() === '') {
+                logger.error('AI response is still empty after retry', { sessionId, input: text });
+                result.output = 'Sorry, I could not generate a response at this time. Please try again later.';
+                return res.status(200).send('No response generated');
+            }
+            logger.info('Retry successful, sending new response', { output: result.output });
+        }
+
         await sendWhatsAppReply(phone, result.output);
 
         logger.info('Successfully processed and replied to the message', { messageId: data.messageId });

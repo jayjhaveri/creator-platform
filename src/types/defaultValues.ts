@@ -10,7 +10,6 @@ export const defaultBrand = (): Brand => ({
     companySize: 'startup',
     description: '',
     uid: '',
-    totalBudget: 0,
     isActive: false,
     createdAt: '',
     updatedAt: '',

@@ -1,6 +1,7 @@
 import { db } from '../config/firebase';
 import { Campaign, Creator, Brand } from '../types/schema';
 import { sendInitialEmail } from '../agents/emailAgent';
+import { creatorAssignmentsService } from '../services/creatorAssignmentsService';
 import logger from '../utils/logger';
 
 export async function sendEmailsToCreators({
@@ -17,15 +18,28 @@ export async function sendEmailsToCreators({
         }
         const campaign = campaignSnap.data() as Campaign;
 
-        const brandSnap = await db.collection('brands').doc(campaign.brandId).get();
-        if (!brandSnap.exists) {
-            throw new Error(`Brand ${campaign.brandId} not found.`);
+        const brandRef = await db.collection('brands').where('brandId', '==', campaign.brandId).get();
+        if (brandRef.empty) {
+            throw new Error(`Brand with ID ${campaign.brandId} not found.`);
         }
-        const brand = brandSnap.data() as Brand;
+        const brandDoc = brandRef.docs[0];
+        const brand = brandDoc.data() as Brand;
 
         const results: string[] = [];
+        const dashboardLink = `https://influenzer-flow-dashboard.lovable.app/campaigns/${campaignId}`;
 
         for (const creatorId of creatorIds) {
+            const alreadyAssigned = await creatorAssignmentsService.isCreatorAssigned(
+                campaign.brandId,
+                creatorId,
+                campaignId
+            );
+
+            if (alreadyAssigned) {
+                results.push(`ℹ️ Email already sent to ${creatorId}. Skipping.`);
+                continue;
+            }
+
             const creatorSnap = await db.collection('creators').doc(creatorId).get();
             if (!creatorSnap.exists) {
                 results.push(`❌ Creator ${creatorId} not found.`);
@@ -59,9 +73,22 @@ export async function sendEmailsToCreators({
                 escalationCount: 0,
             });
 
-            await sendInitialEmail(creator, campaign, brand, negotiationId);
+            // Send email
+            // Fire and forget: send email and record assignment sequentially, but don't await
+            (async () => {
+                await sendInitialEmail(creator, campaign, brand, negotiationId);
+                await creatorAssignmentsService.createOrUpdateAssignment(
+                    campaign.brandId,
+                    creatorId,
+                    campaignId
+                );
+            })();
+
             results.push(`✅ Email sent to ${creator.email}`);
         }
+
+        results.push(`📍 View campaign progress: ${dashboardLink}`);
+        logger.info(`📤 Email dispatch summary for campaign ${campaignId}:\n${results.join('\n')}`);
 
         return { success: true, details: results };
     } catch (error: any) {

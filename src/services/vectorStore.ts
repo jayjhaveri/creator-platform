@@ -11,7 +11,7 @@ interface VectorStoreInput {
 }
 
 interface ChunkMetadata {
-    parrentCollection: string;
+    parentCollection: string;
     sourceId: string;
     chunkIndex: number;
     chunkText: string;

@@ -28,8 +28,9 @@ export async function generateEmbeddingsForChunks(text: string): Promise<Embeddi
     logger.info('🧠 generateEmbeddingsForChunks() called');
     logger.info('📥 Input text length:', text.length);
 
-    const chunkSize = 500;
-    const chunkOverlap = 100;
+    const chunkSize = 800; // 1000 characters per chunk
+    const chunkOverlap = 200; // 200 characters overlap
+    logger.info(`🔍 Splitting text into chunks of size ${chunkSize} with overlap ${chunkOverlap}`);
 
     const chunks = await splitTextWithLangChain(text, chunkSize, chunkOverlap);
     const results: EmbeddingChunk[] = [];

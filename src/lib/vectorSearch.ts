@@ -36,7 +36,7 @@ export async function getMatchingCampaignsByVector(userQuery: string) {
     const results: any[] = [];
 
     for (const doc of snapshot.docs) {
-        const campaignId = doc.get('parentId');
+        const campaignId = doc.get('sourceId');
         const similarityScore = doc.get('similarityScore');
 
         const campaignDoc = await db.collection('campaigns').doc(campaignId).get();

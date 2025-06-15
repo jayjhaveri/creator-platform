@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { resolveCampaign } from '../tools/campaignResolver';
 import { findMatchingCreators } from '../tools/creatorSearch';
 import { sendEmailsToCreators } from '../tools/sendIntroEmails';
-import { createCampaign } from '../tools/createCampaign';
+import { getInitiateVoiceCallsHandler, initiateVoiceCallsSchema } from '../tools/initiateVoiceCallsTool';
 import { createBrand } from '../tools/createBrand';
 import { checkBrandExists } from '../tools/checkBrandExists';
 import {
@@ -17,15 +17,19 @@ import {
     HumanMessagePromptTemplate,
     AIMessagePromptTemplate,
 } from '@langchain/core/prompts';
-import { saveUserMessage, saveAgentMessage, getSessionData, saveToolLog } from '../utils/chatHistory';
+import { saveUserMessage, saveAgentMessage, getSessionData, saveToolLog, getToolLogs } from '../utils/chatHistory';
 import logger from '../utils/logger';
 import { BufferMemory } from 'langchain/memory';
 import { FirestoreChatMessageHistory } from '../memory/FirestoreChatMessageHistory';
+import { campaignManager } from '../tools/campaignManager';
+import { creatorAssignmentsService } from '../services/creatorAssignmentsService';
+import { createNegotiation, getNegotiationByCampaignId } from '../services/negotiationsService';
+import { startCall, startCallInternal } from '../services/voiceAgent/initiateVoiceAgent';
 
 const model = new ChatGroq({
     apiKey: process.env.GROQ_API_KEY!,
-    model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-    temperature: 0.3,
+    model: 'qwen/qwen3-32b',
+    temperature: 0.5,
 });
 
 export async function getOrchestratorAgent(sessionId: string, phone: string): Promise<AgentExecutor> {
@@ -45,6 +49,11 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
             description: 'Find creators that match a campaign. Input: { campaignId: string }',
             schema: z.object({ campaignId: z.string() }),
             func: async ({ campaignId }) => {
+
+                if (!campaignId) {
+                    throw new Error("Missing campaignId. This tool must be used with a valid campaignId.");
+                }
+
                 const result = await findMatchingCreators({ campaignId });
                 await saveToolLog(sessionId, 'findMatchingCreators', result);
                 return JSON.stringify(result);
@@ -64,30 +73,64 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
             },
         }),
         new DynamicStructuredTool({
-            name: 'createCampaign',
-            description: 'Create a new campaign. Input: { campaignName, description, budget, targetAudience, startDate, endDate, requiredPlatforms }',
+            name: 'campaignManager',
+            description: `
+        Manage campaigns for a brand. Supports create, read, update, and delete operations.
+
+        Input:
+        {
+            operation: "create" | "read" | "update" | "delete",
+            payload: { ... },  // varies by operation
+        }
+
+        Rules:
+        - For 'create', provide: campaignName, description, budget, targetAudience, startDate, endDate, requiredPlatforms, [targetCreatorCategories].
+        - For 'read', no payload needed.
+        - For 'update', provide: campaignId, updates (only fields to change).
+        - For 'delete', provide: campaignId.
+    `,
             schema: z.object({
-                campaignName: z.string(),
-                description: z.string(),
-                budget: z.number(),
-                targetAudience: z.string(),
-                startDate: z.string(),
-                endDate: z.string(),
-                requiredPlatforms: z.array(
-                    z.object({
-                        platform: z.enum(['instagram', 'youtube', 'tiktok', 'facebook', 'twitter']),
-                        contentType: z.enum(['post', 'story', 'reel', 'video', 'live']),
-                        quantity: z.number().min(1),
+                operation: z.enum(['create', 'read', 'update', 'delete']),
+                payload: z.union([
+                    z.object({ // create
+                        campaignName: z.string(),
+                        description: z.string(),
+                        budget: z.number(),
+                        targetAudience: z.string(),
+                        requiredPlatforms: z.array(
+                            z.object({
+                                platform: z.string(),
+                                contentType: z.string(),
+                                quantity: z.number(),
+                            })
+                        ),
+                        startDate: z.string(),
+                        endDate: z.string(),
+                        targetCreatorCategories: z.array(z.string()).optional()
+                    }),
+                    z.object({}).strict(), // read
+                    z.object({ // update
+                        campaignId: z.string(),
+                        updates: z.record(z.any())
+                    }),
+                    z.object({ // delete
+                        campaignId: z.string()
                     })
-                )
+                ]), // Flexible, validated inside
             }),
-            func: async (args) => {
+            func: async ({ operation, payload }) => {
                 const brandId = await SessionStateManager.get(sessionId, 'brandId');
                 if (!brandId) {
-                    throw new Error("Cannot create campaign without brandId. Please ensure brand is registered first.");
+                    throw new Error("Missing brandId. Ensure brand is registered first.");
                 }
-                const result = await createCampaign({ brandId, ...args });
-                await saveToolLog(sessionId, 'createCampaign', result);
+
+                const result = await campaignManager({
+                    operation,
+                    payload,
+                    brandId,
+                });
+
+                await saveToolLog(sessionId, 'campaignManager', result);
                 return JSON.stringify(result);
             },
         }),
@@ -98,28 +141,28 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
             func: async ({ phone }) => {
                 const result = await checkBrandExists(phone);
                 await saveToolLog(sessionId, 'checkBrandExists', result);
+                if (result.exists) {
+                    await SessionStateManager.set(sessionId, 'brandId', result.brandId);
+                }
                 return JSON.stringify(result);
             },
         }),
         new DynamicStructuredTool({
             name: 'createBrand',
-            description: 'Create a new brand profile for onboarding. Input: { brandName, email, phone, uid, website, industry, companySize, totalBudget?, description? }',
+            description: 'Create a new brand profile for onboarding. Input: { brandName, email, website, industry, companySize, description? }',
             schema: z.object({
                 brandName: z.string(),
                 email: z.string().email(),
-                phone: z.string(),
-                uid: z.string(),
                 website: z.string(),
                 industry: z.string(),
                 companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']),
-                totalBudget: z.number().nullable().optional(),
                 description: z.string().optional(),
             }),
             func: async (args) => {
-                const { totalBudget, ...rest } = args;
+                const { ...rest } = args;
                 const result = await createBrand({
                     ...rest,
-                    totalBudget: typeof totalBudget === 'undefined' ? null : totalBudget,
+                    phone,
                     isActive: true
                 });
                 await saveToolLog(sessionId, 'createBrand', result);
@@ -127,20 +170,62 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
                 return JSON.stringify(result);
             },
         }),
+        new DynamicStructuredTool({
+            name: initiateVoiceCallsSchema.name,
+            description: `${initiateVoiceCallsSchema.description}
+
+Input:
+{
+  creatorIds: string[], // List of creator IDs
+  campaignId: string     // Campaign ID associated with the creators
+}
+`,
+            schema: z.object({
+                creatorIds: z.array(z.string()),
+                campaignId: z.string(),
+            }),
+            func: getInitiateVoiceCallsHandler(sessionId),
+        }),
     ];
 
     const { messages: priorMessages, userId } = await getSessionData(sessionId);
+
+    const toolLogs = await getToolLogs(sessionId);
+    const toolMemoryContext = toolLogs.map(log => {
+        const resultText = typeof log.result === 'string'
+            ? log.result
+            : JSON.stringify(log.result, null, 2);
+        return `🛠 Tool: ${log.toolName}\nResult:\n${resultText}`;
+    }).join('\n\n---\n\n');
 
     if (userId) {
         await SessionStateManager.set(sessionId, 'brandId', userId);
     }
 
     const prompt = new ChatPromptTemplate({
-        inputVariables: ['input', 'agent_scratchpad', 'chat_history'],
+        inputVariables: ['input', 'agent_scratchpad', 'chat_history', 'isFirstMessage', 'toolMemoryContext'],
         promptMessages: [
             SystemMessagePromptTemplate.fromTemplate(`
     You are a helpful assistant that helps brands manage influencer campaigns.
 
+    Your responses will be sent via WhatsApp, so follow these formatting rules:
+
+- Use *asterisks* for **bold**, _underscores_ for *italics*, and ~tildes~ for *strikethrough* if needed
+- Keep messages short and readable on mobile
+- Do not use markdown blocks, numbered or bulleted lists
+- Paste raw links instead of using formatted hyperlinks
+- Use emojis like ✅ or 🚀 to make replies friendly, but don’t overdo it
+- Prefer short paragraphs with line breaks
+
+    Use the following memory of previous tool calls during this session to avoid redundant steps or unnecessary questions.
+
+{toolMemoryContext}
+
+    If {isFirstMessage} is true:
+- Always call the tool \`checkBrandExists\` using the user's phone number: ${phone}
+- Do not proceed to other tasks until brand status is confirmed
+    
+    For First message, check if the brand is registered using the phone number provided.
     Use the phone number: ${phone} to check if the brand exists using the tool \`checkBrandExists\`.
 
     If the brand exists:
@@ -151,9 +236,14 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
     - Guide the user to onboard by asking for brand details and calling \`createBrand\`.
 
     You can:
-    - Help users create campaigns by collecting required fields step by step
+    - Help users create, view, update, or delete campaigns by using the campaignManager tool
     - Search and connect them with suitable creators
     - Onboard new brands if they aren't already registered
+
+    To find creators for a campaign:
+- Always call the \`findMatchingCreators\` tool using a real \`campaignId\`
+- Never make up creator names
+- Only respond with creator details after calling the tool
 
     Behaviors:
     - Always use the tools available to get accurate data
@@ -182,20 +272,38 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
     });
 
 
-    return new SessionAgentExecutor(sessionId, agent, phone, tools, memory);
+    return new SessionAgentExecutor(sessionId, agent, phone, tools, memory, toolMemoryContext);
 }
 
 class SessionAgentExecutor extends AgentExecutor {
     constructor(private sessionId: string, agent: any, private phone: string, tools: any[],
-        memoryAgent: BufferMemory) {
-        super({ agent, tools, memory: memoryAgent, verbose: true });
+        memoryAgent: BufferMemory, private toolMemoryContext: string) {
+        super({ agent, tools, memory: memoryAgent, verbose: false });
     }
 
     async invoke(input: { input: string }, options?: any) {
         const brandId = await SessionStateManager.get(this.sessionId, 'brandId') || this.phone;
         await saveUserMessage(this.sessionId, input.input, brandId);
 
-        const result = await super.invoke(input, options);
+        //get history for this session
+        const { messages: priorMessages } = await getSessionData(this.sessionId);
+        //if message lengnth is 1, then this is the first message
+        if (priorMessages.length === 1) {
+            //set isFirstMessage to true
+            await SessionStateManager.set(this.sessionId, 'isFirstMessage', true);
+            logger.info(`First message detected for session ${this.sessionId}. Setting isFirstMessage to true.`);
+        } else {
+            //set isFirstMessage to false
+            await SessionStateManager.set(this.sessionId, 'isFirstMessage', false);
+        }
+
+        //check if this is the first message
+        const isFirstMessage = await SessionStateManager.get(this.sessionId, 'isFirstMessage');
+
+        const result = await super.invoke({
+            input: input.input, isFirstMessage,
+            toolMemoryContext: this.toolMemoryContext
+        }, options);
         logger.info(`Agent invoked with input: ${input.input}`);
         logger.info(`Agent steps: ${JSON.stringify(result.intermediateSteps, null, 2)}`);
         if (typeof result.output === 'string') {
@@ -207,7 +315,7 @@ class SessionAgentExecutor extends AgentExecutor {
     }
 }
 
-class SessionStateManager {
+export class SessionStateManager {
     private static state: Record<string, Record<string, any>> = {};
 
     static async get(sessionId: string, key: string) {

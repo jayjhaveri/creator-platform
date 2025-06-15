@@ -23,6 +23,17 @@ export const getNegotiationById = async (id: string) => {
     return { id: doc.id, ...doc.data() };
 };
 
+//get negotiation by campaignId
+export const getNegotiationByCampaignId = async (campaignId: string) => {
+    const snapshot = await db.collection(COLLECTION).where('campaignId', '==', campaignId).get();
+    if (snapshot.empty) return []; // return empty array instead of throwing
+
+    return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+    }));
+};
+
 export const updateNegotiation = async (id: string, data: Partial<Negotiation>) => {
     const now = new Date().toISOString();
     await db.collection(COLLECTION).doc(id).update({

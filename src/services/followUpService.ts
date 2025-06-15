@@ -12,10 +12,19 @@ export const processEmailFollowUp = async (negotiationId: string) => {
     if (!negotiationSnap.exists) throw new Error('Negotiation not found');
     const negotiation = negotiationSnap.data() as Negotiation;
 
-    const [creatorSnap, brandSnap, campaignSnap] = await Promise.all([
-        db.collection('creators').doc(negotiation.creatorId).get(),
-        db.collection('brands').doc(negotiation.brandId).get(),
-        db.collection('campaigns').doc(negotiation.campaignId).get(),
+    const creatorSnapPromise = db.collection('creators').doc(negotiation.creatorId).get();
+    const campaignSnapPromise = db.collection('campaigns').doc(negotiation.campaignId).get();
+
+    // Use where for brandId instead of doc
+    const brandQuerySnap = await db.collection('brands')
+        .where('brandId', '==', negotiation.brandId)
+        .limit(1)
+        .get();
+    const brandSnap = brandQuerySnap.docs[0];
+
+    const [creatorSnap, campaignSnap] = await Promise.all([
+        creatorSnapPromise,
+        campaignSnapPromise,
     ]);
 
     if (!creatorSnap.exists || !brandSnap.exists || !campaignSnap.exists) {
