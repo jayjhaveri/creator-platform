@@ -51,9 +51,19 @@ export async function getSessionData(sessionId: string): Promise<{
     const ref = db.collection(CHAT_COLLECTION).doc(sessionId);
     const snapshot = await ref.get();
     const data = snapshot.data();
+    let messages: Message[] = [];
+
+    //limit 20 messages
+    if (data?.messages && Array.isArray(data.messages)) {
+        messages = data.messages.slice(-20); // Get the last 20 messages
+    }
+    if (!data) {
+        throw new Error(`Session ${sessionId} not found.`);
+    }
+
     return {
-        messages: data?.messages || [],
-        userId: data?.userId
+        messages,
+        userId: data.userId,
     };
 }
 
@@ -75,6 +85,7 @@ export async function getToolLogs(sessionId: string): Promise<{
     const snapshot = await db
         .collection(TOOL_LOG_COLLECTION)
         .where('sessionId', '==', sessionId)
+        .limit(20)
         .orderBy('createdAt', 'asc')
         .get();
 

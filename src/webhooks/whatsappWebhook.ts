@@ -15,7 +15,7 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
         }
 
         const data = req.body;
-        logger.info('Request body received', { body: data });
+        logger.info('Request body received', JSON.stringify(data, null, 2));
 
         if (!data.messageId || !data.content || !data.from) {
             logger.error('Missing required fields in request body', { body: data });
