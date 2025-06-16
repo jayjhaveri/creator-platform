@@ -278,7 +278,7 @@ Input:
 class SessionAgentExecutor extends AgentExecutor {
     constructor(private sessionId: string, agent: any, private phone: string, tools: any[],
         memoryAgent: BufferMemory, private toolMemoryContext: string) {
-        super({ agent, tools, memory: memoryAgent, verbose: false });
+        super({ agent, tools, memory: memoryAgent, verbose: false, returnIntermediateSteps: true });
     }
 
     async invoke(input: { input: string }, options?: any) {
