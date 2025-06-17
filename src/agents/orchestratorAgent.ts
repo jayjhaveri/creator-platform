@@ -22,15 +22,21 @@ import logger from '../utils/logger';
 import { BufferMemory } from 'langchain/memory';
 import { FirestoreChatMessageHistory } from '../memory/FirestoreChatMessageHistory';
 import { campaignManager } from '../tools/campaignManager';
-import { creatorAssignmentsService } from '../services/creatorAssignmentsService';
-import { createNegotiation, getNegotiationByCampaignId } from '../services/negotiationsService';
-import { startCall, startCallInternal } from '../services/voiceAgent/initiateVoiceAgent';
+import { ChatVertexAI } from '@langchain/google-vertexai';
 
-const model = new ChatGroq({
-    apiKey: process.env.GROQ_API_KEY!,
-    model: 'qwen/qwen3-32b',
-    temperature: 0.5,
+const model = new ChatVertexAI({
+    model: 'gemini-2.5-flash-preview-05-20',
+    temperature: 0.4,
+    maxOutputTokens: 1024,
+    maxRetries: 3,
+    convertSystemMessageToHumanContent: true,
 });
+
+// const model = new ChatGroq({
+//     apiKey: process.env.GROQ_API_KEY!,
+//     model: 'qwen/qwen3-32b',
+//     temperature: 0.5,
+// });
 
 export async function getOrchestratorAgent(sessionId: string, phone: string): Promise<AgentExecutor> {
     const tools = [
@@ -233,11 +239,10 @@ Input:
     - Proceed to help with campaign tasks.
 
     If not:
-    If not:
-- Welcome the user warmly and explain that this agent helps automate creator marketing campaigns, outreach, and negotiation
-- Let them know that to get started, you’ll need a few quick brand details (like brand name, email, website, industry, description)
-- Clearly ask for these details so you can register them using the \`createBrand\` tool
-- Reassure them that this is a one-time setup and will unlock all campaign automation features
+    - Welcome the user warmly and explain that this agent helps automate creator marketing campaigns, outreach, and negotiation
+    - Let them know that to get started, you’ll need a few quick brand details (like brand name, email, website, industry, description)
+    - Clearly ask for these details so you can register them using the \`createBrand\` tool
+    - Reassure them that this is a one-time setup and will unlock all campaign automation features
 
     You can:
     - Help users create, view, update, or delete campaigns by using the campaignManager tool
@@ -246,12 +251,16 @@ Input:
 
     To find creators for a campaign:
 - Always call the \`findMatchingCreators\` tool using a real \`campaignId\`
-- Never make up creator names
-- Only respond with creator details after calling the tool
+- Never respond with creator names, emails, or stats unless the tool \`findMatchingCreators\` is successfully called and its output is used directly.
+
+Do not assume creator info. Do not invent names or details under any condition. If you don't have enough info, ask the user for it.
 
     Behaviors:
-    - Always use the tools available to get accurate data
-    - Never assume — resolve or create campaigns and brands only with the tools
+    - Before calling any tool that creates or updates data (e.g., createBrand, campaignManager.create):
+      - Confirm the full details with the user
+      - Rephrase the data clearly as a summary (e.g., campaign name, budget, dates, platforms, audience)
+      - Ask “Should I proceed with creating this?” or a similar yes/no confirmation
+      - Only call the tool if the user says yes or confirms
     - Ask for missing info when needed, then take action
     - Be natural, clear, and helpful in your responses
     `),
