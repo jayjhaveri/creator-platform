@@ -1,29 +1,23 @@
-import { db } from '../config/firebase';
+import { getBrandByPhone } from '../services/brandService'; // or wherever it's placed
+import { Brand } from '../types/schema';
 import logger from '../utils/logger';
 
 /**
- * Checks if a brand exists in the Firestore using the provided phone number.
- * 
- * @param phone - The phone number to look up.
- * @returns An object indicating whether the brand exists and, if it does, the brandId.
+ * Checks if a brand exists using the phone number.
  */
-export async function checkBrandExists(phone: string): Promise<{ exists: boolean; brandId?: string }> {
+export async function checkBrandExists(phone: string): Promise<{ exists: boolean; brandId?: string } & Partial<Brand>> {
     logger.info('Checking if brand exists', { phone });
 
-    const snapshot = await db.collection('brands').where('phone', '==', phone).limit(1).get();
+    const brand = await getBrandByPhone(phone);
 
-    if (snapshot.empty) {
+    if (!brand) {
         logger.info('No brand found for the provided phone number', { phone });
         return { exists: false };
     }
 
-    const doc = snapshot.docs[0];
-    const brandData = {
+    logger.info('Brand found', { phone, brandId: brand.brandId });
+    return {
         exists: true,
-        brandId: doc.id,
-        ...doc.data() as { brandName: string; email: string; phone: string; uid: string; website: string; industry: string; companySize: string; totalBudget?: number | null; description?: string }
+        ...brand
     };
-
-    logger.info('Brand found', { phone, brandId: doc.id });
-    return brandData;
 }

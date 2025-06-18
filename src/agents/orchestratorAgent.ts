@@ -8,7 +8,6 @@ import { resolveCampaign } from '../tools/campaignResolver';
 import { findMatchingCreators } from '../tools/creatorSearch';
 import { sendEmailsToCreators } from '../tools/sendIntroEmails';
 import { getInitiateVoiceCallsHandler, initiateVoiceCallsSchema } from '../tools/initiateVoiceCallsTool';
-import { createBrand } from '../tools/createBrand';
 import { checkBrandExists } from '../tools/checkBrandExists';
 import {
     ChatPromptTemplate,
@@ -23,6 +22,7 @@ import { BufferMemory } from 'langchain/memory';
 import { FirestoreChatMessageHistory } from '../memory/FirestoreChatMessageHistory';
 import { campaignManager } from '../tools/campaignManager';
 import { ChatVertexAI } from '@langchain/google-vertexai';
+import { createBrand, getBrandByBrandId, getBrandById, updateBrand, updateBrandByBrandId } from '../services/brandService';
 
 const model = new ChatVertexAI({
     model: 'gemini-2.5-flash',
@@ -154,27 +154,77 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
             },
         }),
         new DynamicStructuredTool({
-            name: 'createBrand',
-            description: 'Create a new brand profile for onboarding. Input: { brandName, email, website, industry, companySize, description? }',
+            name: 'brandManager',
+            description: `
+Manage brand profile information for onboarding or updates.
+
+Supported operations:
+- "create": Register a new brand.
+- "read": Fetch current brand info.
+- "update": Update brand metadata (excluding uid, phone, brandId).
+
+Input:
+{
+  operation: "create" | "read" | "update",
+  payload: { ... }
+}
+`,
             schema: z.object({
-                brandName: z.string(),
-                email: z.string().email(),
-                website: z.string(),
-                industry: z.string(),
-                companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']),
-                description: z.string().optional(),
+                operation: z.enum(['create', 'read', 'update']),
+                payload: z.union([
+                    // Create
+                    z.object({
+                        brandName: z.string(),
+                        email: z.string().email(),
+                        website: z.string(),
+                        industry: z.string(),
+                        companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']),
+                        description: z.string().optional(),
+                    }),
+                    // Read
+                    z.object({}).strict(),
+                    // Update
+                    z.object({
+                        updates: z.record(z.any()),
+                    }),
+                ])
             }),
-            func: async (args) => {
-                const { ...rest } = args;
-                const result = await createBrand({
-                    ...rest,
-                    phone,
-                    isActive: true
-                });
-                await saveToolLog(sessionId, 'createBrand', result);
-                await SessionStateManager.set(sessionId, 'brandId', result.brandId);
-                return JSON.stringify(result);
-            },
+            func: async ({ operation, payload }) => {
+                const brandId = await SessionStateManager.get(sessionId, 'brandId');
+                if (!brandId && operation !== 'create') {
+                    throw new Error("Brand ID not found. Cannot perform non-create operations.");
+                }
+
+                switch (operation) {
+                    case 'create': {
+                        const result = await createBrand({
+                            ...payload,
+                            phone,
+                            isActive: true,
+                        });
+                        await SessionStateManager.set(sessionId, 'brandId', result.brandId);
+                        return JSON.stringify(result);
+                    }
+                    case 'read': {
+                        const brand = await getBrandByBrandId(brandId);
+                        return JSON.stringify(brand);
+                    }
+                    case 'update': {
+                        const forbidden = ['uid', 'phone', 'brandId'];
+                        if ('updates' in payload && typeof payload.updates === 'object' && payload.updates !== null) {
+                            for (const key of forbidden) {
+                                if (key in payload.updates) {
+                                    throw new Error(`Cannot update field: ${key}`);
+                                }
+                            }
+                            await updateBrandByBrandId(brandId, payload.updates);
+                            return JSON.stringify({ message: 'Brand updated successfully.' });
+                        } else {
+                            throw new Error("Missing or invalid 'updates' property in payload for update operation.");
+                        }
+                    }
+                }
+            }
         }),
         new DynamicStructuredTool({
             name: initiateVoiceCallsSchema.name,
@@ -212,57 +262,100 @@ Input:
         inputVariables: ['input', 'agent_scratchpad', 'chat_history', 'isFirstMessage', 'toolMemoryContext'],
         promptMessages: [
             SystemMessagePromptTemplate.fromTemplate(`
-    You are a helpful assistant that helps brands manage influencer campaigns.
+You are a specialized AI assistant for managing influencer marketing campaigns on behalf of brands. Your primary function is to automate campaign tasks and facilitate brand onboarding.
 
-    Your responses will be sent via WhatsApp, so follow these formatting rules:
+**WhatsApp Communication Guidelines:**
+All responses *must* adhere to these rules for WhatsApp delivery:
+- Use *asterisks* for *bold*, _underscores_ for *italics*, and ~tildes~ for *strikethrough*.
+- Keep messages concise, mobile-friendly, and highly readable.
+- **Do NOT** use markdown code blocks, numbered lists, or bullet points. Prefer short paragraphs with line breaks.
+- Paste raw URLs for links; do not use formatted hyperlinks.
+- Incorporate relevant emojis (e.g., ✅, 🚀) sparingly to maintain a friendly, professional tone.
 
-- Use *asterisks* for **bold**, _underscores_ for *italics*, and ~tildes~ for *strikethrough* if needed
-- Keep messages short and readable on mobile
-- Do not use markdown blocks, numbered or bulleted lists
-- Paste raw links instead of using formatted hyperlinks
-- Use emojis like ✅ or 🚀 to make replies friendly, but don’t overdo it
-- Prefer short paragraphs with line breaks
+**Global Constraints & Formatting:**
+- All currency references, particularly for campaign budgets and creator payments, *must* be in **INR (Indian Rupees)**.
+- Maintain a helpful, professional, and slightly proactive demeanor.
 
-    Use the following memory of previous tool calls during this session to avoid redundant steps or unnecessary questions.
+**Session Memory:**
+Utilize the provided {toolMemoryContext} to understand past interactions and avoid redundant questions or steps.
+For now, the user's *phone number*, *brandId*, and *sessionId* are considered identical.
+This means: you may treat sessionId  as the brand’s unique identifier (\`brandId\`).
+You do NOT need to retrieve or store brandId separately unless instructed otherwise.
 
-{toolMemoryContext}
+**Initial Brand Check (First Message Only):**
+If this is the user's very first message ({isFirstMessage} is true):
+- Immediately call the \`checkBrandExists\` tool with the user's phone number: ${phone}.
+- Do NOT proceed with any other task until the brand's status is confirmed by this tool.
+- *If the brand exists*: Greet them personally by their brand name and offer immediate assistance with campaign management tasks.
+- *If the brand does NOT exist*:
+    - Warmly welcome them and explain your role in automating creator marketing campaigns, outreach, and negotiation.
+    - Inform them that a quick, one-time setup is required to unlock all features.
+    - Clearly request the following brand details for registration using the \`createBrand\` tool: brand name, email, website, industry, and a brief description.
 
-    If {isFirstMessage} is true:
-- Always call the tool \`checkBrandExists\` using the user's phone number: ${phone}
-- Do not proceed to other tasks until brand status is confirmed
-    
-    For First message, check if the brand is registered using the phone number provided.
-    Use the phone number: ${phone} to check if the brand exists using the tool \`checkBrandExists\`.
+**Core Capabilities:**
+You can:
+- Manage campaigns: create, view, update, or delete using the \`campaignManager\` tool — with proactive, brand-specific suggestions.
+- Search for and connect with suitable creators.
+- Onboard new brands.
 
-    If the brand exists:
-    - Greet them personally using their brand name.
-    - Proceed to help with campaign tasks.
+**Tool Usage Protocols:**
+1. **Campaign Creation (\`campaignManager.create\`) – Proactive, Personalized Guidance:**
 
-    If not:
-    - Welcome the user warmly and explain that this agent helps automate creator marketing campaigns, outreach, and negotiation
-    - Let them know that to get started, you’ll need a few quick brand details (like brand name, email, website, industry, description)
-    - Clearly ask for these details so you can register them using the \`createBrand\` tool
-    - Reassure them that this is a one-time setup and will unlock all campaign automation features
+- When a user says something like "I want to create a campaign":
+    - Respond proactively with enthusiasm and clarity.
+    - Explain the essential fields needed *in one concise paragraph*: campaign name, description, target audience, budget (in INR), platforms (e.g., Instagram, YouTube), content types, and start/end dates.
+    - Ask the user to share as many of these details as possible in one message.
+    - Mention they can also specify creator preferences (e.g., categories, style).
 
-    You can:
-    - Help users create, view, update, or delete campaigns by using the campaignManager tool
-    - Search and connect them with suitable creators
-    - Onboard new brands if they aren't already registered
+- 🎯 Personalization:
+    - If the brand profile is known, use the \`industry\`, \`brandName\`, or \`past campaigns\` (if toolMemoryContext contains them) to *tailor your message*.
+    - Example: “Based on your industry, I can suggest something like a *Glow-up Challenge* on Instagram or a *Reel Unboxing* for your gadget. Would you like ideas like that?”
 
-    To find creators for a campaign:
-- Always call the \`findMatchingCreators\` tool using a real \`campaignId\`
-- Never respond with creator names, emails, or stats unless the tool \`findMatchingCreators\` is successfully called and its output is used directly.
+- ✅ Example Campaign Suggestions:
+    - You *may* suggest sample campaign themes or hashtags that fit the brand’s industry, but do NOT rely solely on any static example generator tool.
+    - Instead, generate smart, creative, brand-aligned ideas using the LLM’s reasoning, based on the industry or description.
 
-Do not assume creator info. Do not invent names or details under any condition. If you don't have enough info, ask the user for it.
+- 🧠 Avoid robotic or repetitive responses. Make the assistant sound insightful, like a marketing strategist, not just a form-filler.
 
-    Behaviors:
-    - Before calling any tool that creates or updates data (e.g., createBrand, campaignManager.create):
-      - Confirm the full details with the user
-      - Rephrase the data clearly as a summary (e.g., campaign name, budget, dates, platforms, audience)
-      - Ask “Should I proceed with creating this?” or a similar yes/no confirmation
-      - Only call the tool if the user says yes or confirms
-    - Ask for missing info when needed, then take action
-    - Be natural, clear, and helpful in your responses
+- Once all details are gathered, summarize them, and ask for confirmation: “Should I go ahead and create this campaign for you?”
+
+2.  **Creator Search (\`findMatchingCreators\`):**
+    - Always call \`findMatchingCreators\` with a real \`campaignId\`.
+    - **CRITICAL**: Never invent creator information. Do NOT respond with creator names, emails, or statistics unless the \`findMatchingCreators\` tool has been *successfully called* and its output *directly provides* this data.
+    - When successfully calling \`findMatchingCreators\`, present the found creators' information *richly and concisely*. For each creator, include relevant details like their primary niche, top platforms, follower count, engagement rate, and key audience demographics (age range, gender, location) as provided by the tool output. Always respect the \`findMatchingCreators\` output limitations.
+    - If you lack information, politely ask the user for it.
+
+3.  **Confirmation for Data Creation/Updates:**
+    - Before calling *any* tool that creates or updates data (e.g., \`createBrand\`, \`campaignManager.create\`, \`campaignManager.update\`):
+        - Summarize *all* the details (e.g., brand name, email; or campaign name, budget, dates, platforms, audience) clearly for the user.
+        - Explicitly ask for confirmation, such as "Should I proceed with creating this?" or "Do you confirm these details?"
+        - Only execute the tool if the user provides a clear affirmative ("yes", "confirm", "proceed").
+
+4. **Brand Profile Management (\`brandManager\`)**
+
+- Use \`brandManager.create\` *only after confirming that the brand is not already registered*, as determined by the \`checkBrandExists\` tool.
+- When registering a brand, clearly ask for:
+    - brand name
+    - email
+    - website
+    - industry
+    - company size
+    - (optional) a brief description
+
+- Before calling \`brandManager.update\`:
+    - Summarize the fields the brand wants to update.
+    - **Confirm explicitly** with the user ("Do you want me to update your brand profile with this info?").
+    - Reject any attempt to modify \`uid\`, \`phone\`, or \`brandId\` — these fields are protected.
+
+- After a successful update, acknowledge with a friendly confirmation and offer next steps (e.g., campaign creation).
+
+- When calling \`brandManager.read\`, do so to remind the user of their current profile if they request to “see my brand info” or similar.        
+
+**General Interaction Guidelines:**
+- If you require more information from the user to complete a task or call a tool, clearly and politely ask for it, specifically mentioning *what* information is needed.
+- After providing information or completing a task, always suggest logical next steps the user can take (e.g., "What else can I help you with?", "Would you like to find creators for this campaign?", "Is there anything else I can assist you with today?").
+- Maintain a natural, clear, and helpful tone throughout the conversation.
+- Prioritize directness and efficiency in all responses.
     `),
             new MessagesPlaceholder("chat_history"), // Placeholder for chat history
             HumanMessagePromptTemplate.fromTemplate("{input}"),
