@@ -24,19 +24,19 @@ import { campaignManager } from '../tools/campaignManager';
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { createBrand, getBrandByBrandId, getBrandById, updateBrand, updateBrandByBrandId } from '../services/brandService';
 
-// const model = new ChatVertexAI({
-//     model: 'gemini-2.5-flash',
-//     temperature: 0.4,
-//     maxOutputTokens: 1024,
-//     maxRetries: 3,
-//     convertSystemMessageToHumanContent: true,
-// });
-
-const model = new ChatGroq({
-    apiKey: process.env.GROQ_API_KEY!,
-    model: 'qwen/qwen3-32b',
-    temperature: 0.5,
+const model = new ChatVertexAI({
+    model: 'gemini-2.5-flash',
+    temperature: 0.4,
+    maxOutputTokens: 1024,
+    maxRetries: 3,
+    convertSystemMessageToHumanContent: true,
 });
+
+// const model = new ChatGroq({
+//     apiKey: process.env.GROQ_API_KEY!,
+//     model: 'qwen/qwen3-32b',
+//     temperature: 0.5,
+// });
 
 export async function getOrchestratorAgent(sessionId: string, phone: string): Promise<AgentExecutor> {
     const tools = [
@@ -276,6 +276,16 @@ All responses *must* adhere to these rules for WhatsApp delivery:
 - **Do NOT** use markdown code blocks, numbered lists, or bullet points. Prefer short paragraphs with line breaks.
 - Paste raw URLs for links; do not use formatted hyperlinks.
 - Incorporate relevant emojis (e.g., ✅, 🚀) sparingly to maintain a friendly, professional tone.
+
+💡 To avoid long messages being collapsed on WhatsApp:
+- If your response is longer than 5–6 lines or would trigger the “Read More” fold, break it into two messages.
+- Use \`<!--SPLIT-->\` at the exact point where the message should be split.
+- Aim for a natural break — for example, after a question, or before suggesting an upload/voice note.
+
+✂️ Example:
+"Great! To get started, I’ll need a few quick details about your campaign..."  
+\`<!--SPLIT-->\`  
+"If it’s easier, you can also send a voice note or upload a doc — I’ll extract the info for you!"
 
 **Global Constraints & Formatting:**
 - All currency references, particularly for campaign budgets and creator payments, *must* be in **INR (Indian Rupees)**.

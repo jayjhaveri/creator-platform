@@ -83,6 +83,7 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
             }
         }
 
+        logger.info('Agent response generated', { output: result.output });
         const messages = result.output?.split('<!--SPLIT-->') ?? [];
 
         if (messages.length === 0 || (messages.length === 1 && !messages[0].trim())) {
