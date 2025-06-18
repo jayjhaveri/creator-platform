@@ -83,7 +83,19 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
             }
         }
 
-        await sendWhatsAppReply(phone, result.output);
+        const messages = result.output?.split('<!--SPLIT-->') ?? [];
+
+        if (messages.length === 0 || (messages.length === 1 && !messages[0].trim())) {
+            await sendWhatsAppReply(phone, "Sorry, I couldn't generate a response. Please try again.");
+        } else {
+            for (const msg of messages) {
+                const trimmed = msg.trim();
+                if (trimmed.length > 0) {
+                    await sendWhatsAppReply(phone, trimmed);
+                }
+            }
+        }
+
         return res.status(200).send('Processed and replied.');
     } catch (err) {
         logger.error('WhatsApp Webhook Error', { error: err });
