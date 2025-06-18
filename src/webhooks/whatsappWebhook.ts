@@ -53,10 +53,13 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
             extractedText = data.content.text;
         } else if (contentType === 'image') {
             extractedText = await extractTextFromDocument(data.content.media.url);
+            extractedText = `Extracted from uploaded image:\n${extractedText}`;
         } else if (contentType === 'document') {
             extractedText = await extractTextFromDocument(data.content.media.url);
+            extractedText = `Extracted from uploaded document:\n${extractedText}`;
         } else if (contentType === 'voice') {
             extractedText = await transcribeVoice(data.content.media.url);
+            extractedText = `Transcribed from voice note:\n${extractedText}`;
         } else {
             logger.warn('Unsupported content type received', { contentType });
             await sendWhatsAppReply(phone, 'Sorry, I could not understand this type of message.');
