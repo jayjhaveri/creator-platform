@@ -203,10 +203,13 @@ Input:
                             isActive: true,
                         });
                         await SessionStateManager.set(sessionId, 'brandId', result.brandId);
+                        await saveToolLog(sessionId, 'brandManager.create', result);
+                        logger.info(`Brand created with ID: ${result.brandId}`);
                         return JSON.stringify(result);
                     }
                     case 'read': {
                         const brand = await getBrandByBrandId(brandId);
+                        await saveToolLog(sessionId, 'brandManager.read', brand);
                         return JSON.stringify(brand);
                     }
                     case 'update': {
@@ -218,6 +221,8 @@ Input:
                                 }
                             }
                             await updateBrandByBrandId(brandId, payload.updates);
+                            await saveToolLog(sessionId, 'brandManager.update', payload.updates);
+                            logger.info(`Brand updated with ID: ${brandId}`);
                             return JSON.stringify({ message: 'Brand updated successfully.' });
                         } else {
                             throw new Error("Missing or invalid 'updates' property in payload for update operation.");
