@@ -24,19 +24,19 @@ import { campaignManager } from '../tools/campaignManager';
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { createBrand, getBrandByBrandId, getBrandById, updateBrand, updateBrandByBrandId } from '../services/brandService';
 
-const model = new ChatVertexAI({
-    model: 'gemini-2.5-flash',
-    temperature: 0.4,
-    maxOutputTokens: 1024,
-    maxRetries: 3,
-    convertSystemMessageToHumanContent: true,
-});
-
-// const model = new ChatGroq({
-//     apiKey: process.env.GROQ_API_KEY!,
-//     model: 'qwen/qwen3-32b',
-//     temperature: 0.5,
+// const model = new ChatVertexAI({
+//     model: 'gemini-2.5-flash',
+//     temperature: 0.4,
+//     maxOutputTokens: 1024,
+//     maxRetries: 3,
+//     convertSystemMessageToHumanContent: true,
 // });
+
+const model = new ChatGroq({
+    apiKey: process.env.GROQ_API_KEY!,
+    model: 'qwen/qwen3-32b',
+    temperature: 0.5,
+});
 
 export async function getOrchestratorAgent(sessionId: string, phone: string): Promise<AgentExecutor> {
     const tools = [
