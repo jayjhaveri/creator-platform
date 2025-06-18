@@ -1,6 +1,6 @@
 import { DocumentProcessorServiceClient } from '@google-cloud/documentai';
 import axios from 'axios';
-import { fileTypeFromBuffer } from 'file-type';
+import { fromBuffer } from 'file-type';
 import logger from './logger';
 
 const docaiClient = new DocumentProcessorServiceClient();
@@ -26,7 +26,7 @@ export async function extractTextFromDocument(fileUrl: string): Promise<string> 
 
         // Step 2: Detect MIME type dynamically
         logger.info(`Detecting MIME type of the file`);
-        const fileType = await fileTypeFromBuffer(fileBuffer);
+        const fileType = await fromBuffer(fileBuffer);
         if (!fileType || !fileType.mime) {
             logger.error('Unable to determine MIME type of the file');
             throw new Error('Unable to determine MIME type of the file');

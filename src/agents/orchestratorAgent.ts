@@ -25,7 +25,7 @@ import { campaignManager } from '../tools/campaignManager';
 import { ChatVertexAI } from '@langchain/google-vertexai';
 
 const model = new ChatVertexAI({
-    model: 'gemini-2.5-flash-preview-05-20',
+    model: 'gemini-2.5-flash',
     temperature: 0.4,
     maxOutputTokens: 1024,
     maxRetries: 3,
