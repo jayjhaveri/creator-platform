@@ -23,6 +23,7 @@ import { FirestoreChatMessageHistory } from '../memory/FirestoreChatMessageHisto
 import { campaignManager } from '../tools/campaignManager';
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { createBrand, getBrandByBrandId, getBrandById, updateBrand, updateBrandByBrandId } from '../services/brandService';
+import { getDateTimeTool } from '../tools/dateTimeTool';
 
 const model = new ChatVertexAI({
     model: 'gemini-2.5-flash',
@@ -153,6 +154,8 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
                 return JSON.stringify(result);
             },
         }),
+        new DynamicStructuredTool(getDateTimeTool),
+
         new DynamicStructuredTool({
             name: 'brandManager',
             description: `
@@ -375,6 +378,7 @@ You can:
 💡 To avoid long messages on WhatsApp, you can use \`<!--SPLIT-->\` in your response to send two messages instead of one.
 - After providing information or completing a task, always suggest logical next steps the user can take (e.g., "What else can I help you with?", "Would you like to find creators for this campaign?", "Is there anything else I can assist you with today?").
 - Maintain a natural, clear, and helpful tone throughout the conversation.
+- You may use the getDateTime tool when current date/time is required for validations, deadlines, or scheduling actions (e.g., checking if a campaign start date is in the future)
 - Prioritize directness and efficiency in all responses.
     `),
             new MessagesPlaceholder("chat_history"), // Placeholder for chat history
