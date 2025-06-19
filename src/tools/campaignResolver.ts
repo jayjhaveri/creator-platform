@@ -1,7 +1,8 @@
 import { getMatchingCampaignsByVector } from '../lib/vectorSearch';
 
-export async function resolveCampaign({ userInput }: { userInput: string }) {
-    const campaigns = await getMatchingCampaignsByVector(userInput);
+export async function resolveCampaign({ userInput, phone }: { userInput: string, phone: string }) {
+    const campaigns = await getMatchingCampaignsByVector(userInput, phone);
+
 
     if (!campaigns || campaigns.length === 0) {
         return { status: 'not_found' };

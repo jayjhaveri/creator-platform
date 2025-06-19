@@ -3,7 +3,7 @@ import { generateEmbeddingsForChunks } from '../services/embeddingService';
 import { db } from '../config/firebase';
 
 
-export async function getMatchingCampaignsByVector(userQuery: string) {
+export async function getMatchingCampaignsByVector(userQuery: string, phone: string) {
     logger.info('🔍 Generating embedding for query:', userQuery);
     const [embedding] = await generateEmbeddingsForChunks(userQuery);
 
@@ -40,6 +40,13 @@ export async function getMatchingCampaignsByVector(userQuery: string) {
         const similarityScore = doc.get('similarityScore');
 
         const campaignDoc = await db.collection('campaigns').doc(campaignId).get();
+        const campaignData = campaignDoc.data();
+        //filter campaigns by phone number
+        if (campaignDoc.exists && campaignData && campaignData.phone !== phone) {
+            logger.info(`❌ Campaign with ID ${campaignId} does not match phone number ${phone}`);
+            continue;
+        }
+
         if (!campaignDoc.exists) {
             logger.warn(`⚠️ Campaign doc not found for ID: ${campaignId}`);
             continue;
