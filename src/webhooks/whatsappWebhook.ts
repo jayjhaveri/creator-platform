@@ -52,12 +52,18 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
         if (contentType === 'text') {
             extractedText = data.content.text;
         } else if (contentType === 'image') {
+            //send acknowledgment reply
+            await sendWhatsAppReply(phone, 'Processing your image, please wait...');
             extractedText = await extractTextFromDocument(data.content.media.url);
             extractedText = `Extracted from uploaded image:\n${extractedText}`;
         } else if (contentType === 'document') {
+            //send acknowledgment reply
+            await sendWhatsAppReply(phone, 'Processing your document, please wait...');
             extractedText = await extractTextFromDocument(data.content.media.url);
             extractedText = `Extracted from uploaded document:\n${extractedText}`;
         } else if (contentType === 'voice') {
+            //send acknowledgment reply
+            await sendWhatsAppReply(phone, 'Processing your voice note, please wait...');
             extractedText = await transcribeVoice(data.content.media.url);
             extractedText = `Transcribed from voice note:\n${extractedText}`;
         } else {
