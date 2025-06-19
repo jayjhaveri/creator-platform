@@ -46,7 +46,7 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
             description: 'Resolves or finds a campaign from user query. Input: { userInput: string }',
             schema: z.object({ userInput: z.string() }),
             func: async ({ userInput }) => {
-                const result = await resolveCampaign({ userInput });
+                const result = await resolveCampaign({ userInput, phone });
                 await saveToolLog(sessionId, 'resolveCampaign', result);
                 return JSON.stringify(result);
             },
