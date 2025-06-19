@@ -41,7 +41,7 @@ export const saveAudioToFirebase = async (
 
         const [signedUrl] = await file.getSignedUrl({
             action: 'read',
-            expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+            expires: '03-01-2500', // Far future date, effectively non-expiring
         });
 
         logger.info(`Uploaded audio for conversation ${conversationId}, URL: ${signedUrl}`);

@@ -6,6 +6,11 @@ import { VoiceCommunication } from '../types/schema';
 import { elevenLabs } from '../services/elevenLabs/clients/elevenLabsClient';
 import logger from '../utils/logger';
 import { saveAudioToFirebase } from '../utils/uploadAudioToFirebase';
+import { ChatVertexAI } from '@langchain/google-vertexai';
+import { HumanMessage } from '@langchain/core/messages';
+import { send } from 'process';
+import { sendWhatsAppReply } from '../utils/whatsapp';
+import { saveAgentMessage, saveUserMessage } from '../utils/chatHistory';
 
 export const pollTranscription = async (req: Request, res: Response) => {
     try {
@@ -52,6 +57,82 @@ export const pollTranscription = async (req: Request, res: Response) => {
                     }
 
                     const audioBuffer = await audioResponse.arrayBuffer();
+
+                    try {
+                        const model = new ChatVertexAI({
+                            model: 'gemini-2.5-flash',
+                            temperature: 0.4,
+                            maxOutputTokens: 3000,
+                            maxRetries: 3,
+                        });
+
+                        const transcriptText = (body.transcript || [])
+                            .filter((msg: any) => msg?.role && typeof msg.message === 'string' && msg.message.trim())
+                            .map((msg: any) => `${msg.role === 'user' ? 'User' : 'Agent'}: ${msg.message.trim()}`)
+                            .join('\n');
+
+                        const negotiationSnap = await db.collection('negotiations').doc(voiceComm.negotiationId).get();
+                        if (!negotiationSnap.exists) throw new Error('Negotiation not found');
+
+                        const negotiation = negotiationSnap.data();
+                        if (!negotiation) throw new Error('Negotiation data is missing');
+
+                        const campaignSnap = await db.collection('campaigns').doc(negotiation.campaignId).get();
+                        const campaign = campaignSnap.exists ? campaignSnap.data() : null;
+                        if (!campaign) throw new Error('Campaign not found');
+
+                        //get brand details
+                        const brandSnap = await db.collection('brands').where('brandId', '==', negotiation.brandId).limit(1).get();
+                        if (brandSnap.empty) throw new Error('Brand not found');
+                        const brand = brandSnap.docs[0].data();
+                        if (!brand) throw new Error('Brand data is missing');
+
+                        const creatorSnap = await db.collection('creators').doc(voiceComm.creatorId).get();
+                        const creator = creatorSnap.exists ? creatorSnap.data() : null;
+
+                        const dashboardLink = `https://influenzer-flow-dashboard.lovable.app/campaigns/${negotiation.campaignId}`;
+
+                        const summaryPrompt = `
+  You are a WhatsApp-friendly AI summarizer for brand ${brand.brandName}. Format the output in a brief and readable style, use *bold* and emojis where helpful.
+  
+  Context:
+  - Creator: ${creator?.displayName || 'Unknown'} (${creator?.category || 'N/A'})
+  - Campaign: ${campaign?.campaignName || 'Unnamed Campaign'}
+  - Budget: ₹${campaign?.budget?.toLocaleString() || 'N/A'}
+ 
+  
+  Summarize the voice call transcript below. Highlight:
+  - Outcomes or agreements (content, payment, timing)
+  - Action items or follow-ups
+  - Use natural tone, keep it under 6 lines
+  - for more details, visit: ${dashboardLink}
+
+  Transcript:
+  ${transcriptText}
+  `;
+                        const summary = await model.invoke([new HumanMessage(summaryPrompt)]);
+
+                        let phone = brand.phone || 'No phone number provided';
+
+                        // For testing purposes, replace with actual phone number
+                        await sendWhatsAppReply(
+                            phone,
+                            summary.text || 'No summary generated',);
+                        logger.info(`WhatsApp summary sent for ${voiceCommunicationId}`);
+
+                        await saveAgentMessage(
+                            phone,
+                            summary.text || 'No summary generated',
+                            voiceComm.phone,);
+
+                    } catch (error) {
+                        logger.error(`Failed to summarize transcript for ${voiceCommunicationId}:`, error);
+                        await docRef.update({
+                            summaryError: (error as Error).message,
+                            updatedAt: new Date().toISOString(),
+                        });
+                        continue;
+                    }
 
                     await saveAudioToFirebase(
                         Buffer.from(audioBuffer),

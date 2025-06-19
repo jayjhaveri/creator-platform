@@ -126,15 +126,15 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
                 ]), // Flexible, validated inside
             }),
             func: async ({ operation, payload }) => {
-                const brandId = await SessionStateManager.get(sessionId, 'brandId');
-                if (!brandId) {
+                const brand = await checkBrandExists(phone);
+                if (!brand) {
                     throw new Error("Missing brandId. Ensure brand is registered first.");
                 }
 
                 const result = await campaignManager({
                     operation,
                     payload,
-                    brandId,
+                    brandId: brand.brandId || phone, // Use phone as fallback if brandId not found
                 });
 
                 await saveToolLog(sessionId, 'campaignManager', result);
@@ -253,6 +253,7 @@ Input:
     ];
 
     const { messages: priorMessages, userId } = await getSessionData(sessionId);
+    logger.info(`Prior messages for session ${userId}`);
 
     const toolLogs = await getToolLogs(sessionId);
     const toolMemoryContext = toolLogs.map(log => {
@@ -263,6 +264,7 @@ Input:
     }).join('\n\n---\n\n');
 
     if (userId) {
+        logger.info(`Setting brandId for session ${sessionId} to userId ${userId}`);
         await SessionStateManager.set(sessionId, 'brandId', userId);
     }
 
@@ -378,8 +380,12 @@ You can:
 💡 To avoid long messages on WhatsApp, you can use \`<!--SPLIT-->\` in your response to send two messages instead of one.
 - After providing information or completing a task, always suggest logical next steps the user can take (e.g., "What else can I help you with?", "Would you like to find creators for this campaign?", "Is there anything else I can assist you with today?").
 - Maintain a natural, clear, and helpful tone throughout the conversation.
-- You may use the getDateTime tool when current date/time is required for validations, deadlines, or scheduling actions (e.g., checking if a campaign start date is in the future)
+- You need to use the getDateTime tool when current date/time is required for validations, deadlines, or scheduling actions (e.g., checking if a campaign start date is in the future)
 - Prioritize directness and efficiency in all responses.
+
+‼️ CRITICAL: On the user's *first* message (\`isFirstMessage === true\`), you must **always call** the \`checkBrandExists\` tool before anything else. 
+Do NOT proceed with campaign actions until this tool has returned.
+🛑 If you skip this step, the conversation state will be invalid. Always verify the brand first.
     `),
             new MessagesPlaceholder("chat_history"), // Placeholder for chat history
             HumanMessagePromptTemplate.fromTemplate("{input}"),
