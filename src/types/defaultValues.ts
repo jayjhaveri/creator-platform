@@ -45,7 +45,7 @@ export const defaultCampaign = (): Campaign => ({
     brandId: '',
     campaignName: '',
     description: '',
-    budget: 0,
+    budgetPerCreator: 0,
     targetAudience: '',
     deliverables: '',
     startDate: '',

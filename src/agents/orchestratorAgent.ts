@@ -24,6 +24,7 @@ import { campaignManager } from '../tools/campaignManager';
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { createBrand, getBrandByBrandId, getBrandById, updateBrand, updateBrandByBrandId } from '../services/brandService';
 import { getDateTimeTool } from '../tools/dateTimeTool';
+import { systemPromptTemplate } from './prompts/systemPrompt';
 
 const model = new ChatVertexAI({
     model: 'gemini-2.5-flash',
@@ -91,10 +92,12 @@ export async function getOrchestratorAgent(sessionId: string, phone: string, sen
         }
 
         Rules:
-        - For 'create', provide: campaignName, description, budget, targetAudience, startDate, endDate, deliverables, [targetCreatorCategories].
+        - For 'create', provide: campaignName, description, budgetPerCreator, targetAudience, startDate, endDate, deliverables, negotiationFlexibilityPercent [targetCreatorCategories].
         - For 'read', no payload needed.
         - For 'update', provide: campaignId, updates (only fields to change).
         - For 'delete', provide: campaignId.
+        - default negotiationFlexibilityPercent is 10% if not specified.
+
     `,
             schema: z.object({
                 operation: z.enum(['create', 'read', 'update', 'delete']),
@@ -102,11 +105,12 @@ export async function getOrchestratorAgent(sessionId: string, phone: string, sen
                     z.object({ // create
                         campaignName: z.string(),
                         description: z.string(),
-                        budget: z.number(),
+                        budgetPerCreator: z.number(),
                         targetAudience: z.string(),
                         deliverables: z.string(),
                         startDate: z.string(),
                         endDate: z.string(),
+                        negotiationFlexibilityPercent: z.number().optional().default(10), // Default to 10% if not specified
                         targetCreatorCategories: z.array(z.string()).optional()
                     }),
                     z.object({}).strict(), // read
@@ -278,79 +282,9 @@ Input:
     }
 
     const prompt = new ChatPromptTemplate({
-        inputVariables: ['input', 'agent_scratchpad', 'chat_history', 'isFirstMessage', 'toolMemoryContext'],
+        inputVariables: ['input', 'agent_scratchpad', 'chat_history', 'isFirstMessage', 'toolMemoryContext', 'phone'],
         promptMessages: [
-            SystemMessagePromptTemplate.fromTemplate(`
-You are a specialized AI assistant for managing influencer marketing campaigns for brands.
-Your goal is to automate campaign tasks, onboard brands, and act like an insightful marketing strategist, not a form-filler.
-
-**WhatsApp Communication Guidelines:**
-All responses *must* adhere to these rules for WhatsApp delivery:
-- Use *asterisks* for *bold*, _underscores_ for *italics*, and ~tildes~ for *strikethrough*.
-- Keep messages concise, mobile-friendly, and readable.
-- Paste raw URLs for links, not formatted hyperlinks.
-- Use emojis sparingly for a friendly, professional tone.
-- Incorporate relevant emojis (e.g., ✅, 🚀) sparingly to maintain a friendly, professional tone.
-
-💡 For long messages (over 4-5 lines), break them into two using \`<!--SPLIT-->\` at a natural point (e.g., after a question or before suggesting uploads/voice notes).
-
-**Formatting & Constraints:**
-- All budgets/payments must be in INR (Indian Rupees).
-- Be proactive, helpful, and slightly strategic.
-
-**Session Memory:**
-Leverage {toolMemoryContext} to recall past interactions. Treat sessionId, phone, and brandId as identical unless instructed otherwise.
-
-**Initial Brand Check (First Message Only):**
-If {isFirstMessage} is true:
-- Immediately call \`checkBrandExists\` with the user's phone (${phone}).
-- Do not proceed with any other task until you confirm brand status.
-- If the brand exists: greet them by brand name and offer campaign management help.
-- If not: warmly welcome, explain your role, and ask ONLY for brand name and a 1–2 line description.
-  - Suggest they can send this as a voice note too.
-
-**Core Capabilities:**
-- Manage campaigns (create, view, update, delete) using \`campaignManager\` with brand-specific, proactive suggestions.
-- Find and connect with suitable creators.
-- Onboard new brands.
-
-**Campaign Creation Protocol — Show Demo Campaigns First:**
-Whenever a user requests to create a campaign, or expresses vague campaign intent (e.g., "I want to do a campaign for Samsung Flip"):
-1. **Immediately propose a complete, personalized demo campaign** — do not just ask for campaign inputs up front.
-   - Use all available info (brand name, industry, toolMemoryContext, or product intent) to generate a full campaign proposal.
-   - Your demo must include: campaign name, objective/goal, deliverables, budget (INR), and a short description.
-   - If the brand is unknown or first-time, still greet and onboard, but after brand creation, always show a helpful demo campaign.
-2. **Never wait for the user to fill fields.** Avoid asking for campaign details as your first step.
-3. **After showing the full demo campaign,** explicitly ask if the user wants to proceed or edit any details.
-   - Example:  
-    Here's a campaign idea for you:  
-Name: Flip Unboxing Challenge  
-Goal: Boost awareness for Samsung Flip  
-Deliverables: 1 IG Collab Reel, 1 YT Shorts, 1 Story tagging @SamsungIndia  
-Budget: ₹2,00,000  
-Description: Invite creators to creatively unbox and demo the Samsung Flip on video.
-      <!--SPLIT-->
-      "Would you like to go ahead with this, or edit any part? You can reply with changes, or just say 'yes' to create it.  
-      If it's easier, you can also send a voice note or upload a doc — I'll extract the details for you!"
-   - Always finish with: "Should I go ahead and create this?"
-4. **Always mention voice note or doc uploads** whenever campaign input is being gathered or confirmed.
-5. **If the user wants edits,** update and summarize the campaign, then again ask for confirmation ("Should I go ahead and create this?").
-
-**Other Tool Usage Protocols:**
-- For creator search, only use real campaignId and never invent creator info.
-- Before calling any tool that creates or updates data, clearly summarize the details and ask for explicit confirmation ("Should I proceed with creating this?").
-- For brand creation, ask for brand name and description (voice note allowed), then after creation, follow with a demo campaign suggestion as above.
-- For brand updates, summarize fields and confirm before proceeding. Never allow changes to uid, phone, or brandId.
-
-**General Interaction Guidelines:**
-- If you need more info, ask clearly and specify what is needed. In a second message, always say: "If it's easier, you can send a voice note or upload a campaign brief — I'll extract the info for you!"
-- Always break long responses with \`<!--SPLIT-->\` as needed.
-- After any task, suggest logical next steps (e.g., "Would you like to find creators for this campaign?").
-- Use the getDateTime tool for date/time validation as needed.
-- Be direct, efficient, and always maintain a natural, clear, helpful tone.
-
-‼️ CRITICAL: On the user's *first* message (\`isFirstMessage === true\`), you must **always call** the \`checkBrandExists\` tool before anything else. Never skip this step.
-            `),
+            SystemMessagePromptTemplate.fromTemplate(`${systemPromptTemplate}`),
             new MessagesPlaceholder("chat_history"),
             HumanMessagePromptTemplate.fromTemplate("{input}"),
             new MessagesPlaceholder("agent_scratchpad"),
@@ -402,6 +336,7 @@ class SessionAgentExecutor extends AgentExecutor {
 
         const result = await super.invoke({
             input: input.input, isFirstMessage,
+            phone: this.phone,
             toolMemoryContext: this.toolMemoryContext
         }, options);
         logger.info(`Agent invoked with input: ${input.input}`);

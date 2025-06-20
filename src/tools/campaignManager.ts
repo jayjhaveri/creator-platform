@@ -27,13 +27,14 @@ export async function campaignManager({
                     brandId,
                     campaignName: payload.campaignName,
                     description: payload.description,
-                    budget: payload.budget,
+                    budgetPerCreator: payload.budgetPerCreator,
                     targetAudience: payload.targetAudience,
                     deliverables: payload.deliverables,
                     startDate: payload.startDate,
                     endDate: payload.endDate,
                     status: 'draft', // default status on creation
                     targetCreatorCategories: payload.targetCreatorCategories || [],
+                    negotiationFlexibilityPercent: payload.negotiationFlexibilityPercent || 10, // default to 0 if not provided
                     createdAt: now,
                     updatedAt: now,
                 };

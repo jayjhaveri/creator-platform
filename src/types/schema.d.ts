@@ -45,13 +45,14 @@ export interface Campaign {
   brandId: string;
   campaignName: string;
   description: string;
-  budget: number;
+  budgetPerCreator: number;
   targetAudience: string;
   deliverables: string;
   startDate: string;
   endDate: string;
   status: 'draft' | 'active' | 'negotiating' | 'completed' | 'cancelled';
   targetCreatorCategories: CampaignTargetCategory[];
+  negotiationFlexibilityPercent?: number; // NEW FIELD – room for negotiation, e.g. 10 means ±10% leeway
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +76,7 @@ export interface Negotiation {
   createdAt: string;
   updatedAt: string;
   escalationCount: number;
+  negotiationFlexibilityPercent?: number; // NEW FIELD – room for negotiation, e.g. 10 means ±10% leeway
 }
 
 export interface Communication {

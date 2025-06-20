@@ -37,7 +37,7 @@ Campaign Overview:
 - Name: ${campaign.campaignName}
 - Description: ${campaign.description}
 - Deliverables: ${campaign.deliverables}
-- Budget: ₹${campaign.budget}
+- Budget: ₹${campaign.budgetPerCreator}
 - Timeline: ${campaign.startDate} to ${campaign.endDate}
 
 Creator:
@@ -95,7 +95,7 @@ Your job is to handle the entire email thread with creator "${creator.displayNam
 Campaign details:
 - Description: ${campaign.description}
 - Deliverables: ${campaign.deliverables}
-- Budget: ₹${campaign.budget}
+- Budget: ₹${campaign.budgetPerCreator}
 - Timeline: ${campaign.startDate} to ${campaign.endDate}
 
 Creator details:

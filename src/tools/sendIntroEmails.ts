@@ -61,8 +61,8 @@ export async function sendEmailsToCreators({
                 proposedRate: 0,
                 counterRate: 0,
                 finalRate: 0,
-                maxBudget: campaign.budget,
-                deliverables: [],
+                maxBudget: campaign.budgetPerCreator,
+                deliverables: campaign.deliverables,
                 aiAgentNotes: '',
                 creatorAvailability: 'unknown',
                 initialContactMethod: 'email',
@@ -70,6 +70,7 @@ export async function sendEmailsToCreators({
                 voiceCallCompleted: false,
                 createdAt: now,
                 updatedAt: now,
+                negotiationFlexibilityPercent: campaign.negotiationFlexibilityPercent || 10, // Default to 10% if not set
                 escalationCount: 0,
             });
 
