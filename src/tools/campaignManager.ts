@@ -29,7 +29,7 @@ export async function campaignManager({
                     description: payload.description,
                     budget: payload.budget,
                     targetAudience: payload.targetAudience,
-                    requiredPlatforms: payload.requiredPlatforms,
+                    deliverables: payload.deliverables,
                     startDate: payload.startDate,
                     endDate: payload.endDate,
                     status: 'draft', // default status on creation

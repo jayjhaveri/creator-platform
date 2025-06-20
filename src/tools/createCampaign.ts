@@ -1,6 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../config/firebase';
-import { CampaignPlatformRequirement } from '../types/schema'; // adjust path as needed
 
 export async function createCampaign({
     brandId,
@@ -19,7 +18,7 @@ export async function createCampaign({
     targetAudience: string;
     startDate: string;
     endDate: string;
-    requiredPlatforms: CampaignPlatformRequirement[];
+    requiredPlatforms: string;
 }): Promise<{
     status: string;
     campaignId: string;
@@ -29,7 +28,7 @@ export async function createCampaign({
     targetAudience: string;
     startDate: string;
     endDate: string;
-    requiredPlatforms: CampaignPlatformRequirement[];
+    requiredPlatforms: string;
 }> {
     const campaignId = uuidv4();
     const now = new Date().toISOString();

@@ -1,4 +1,4 @@
-import { Brand, Creator, Campaign, CampaignPlatformRequirement, CampaignTargetCategory, Negotiation, Communication, Deal, Deliverable } from './schema';
+import { Brand, Creator, Campaign, CampaignTargetCategory, Negotiation, Communication, Deal } from './schema';
 
 export const defaultBrand = (): Brand => ({
     brandId: '',
@@ -33,11 +33,6 @@ export const defaultCreator = (): Creator => ({
     profilePictureUrl: ''
 });
 
-export const defaultCampaignPlatformRequirement = (): CampaignPlatformRequirement => ({
-    platform: 'instagram',
-    contentType: 'post',
-    quantity: 0,
-});
 
 export const defaultCampaignTargetCategory = (): CampaignTargetCategory => ({
     category: 'other',
@@ -52,21 +47,13 @@ export const defaultCampaign = (): Campaign => ({
     description: '',
     budget: 0,
     targetAudience: '',
-    requiredPlatforms: [],
+    deliverables: '',
     startDate: '',
     endDate: '',
     status: 'draft',
     targetCreatorCategories: [],
     createdAt: '',
     updatedAt: '',
-});
-
-export const defaultDeliverable = (): Deliverable => ({
-    platform: 'instagram',
-    contentType: 'post',
-    quantity: 0,
-    deadline: '',
-    status: 'pending',
 });
 
 export const defaultNegotiation = (): Negotiation => ({
@@ -79,7 +66,7 @@ export const defaultNegotiation = (): Negotiation => ({
     counterRate: 0,
     finalRate: 0,
     maxBudget: 0,
-    deliverables: [],
+    deliverables: '',
     aiAgentNotes: '',
     creatorAvailability: 'unknown',
     initialContactMethod: 'email',
@@ -115,7 +102,7 @@ export const defaultDeal = (): Deal => ({
     creatorId: '',
     finalRate: 0,
     paymentTerms: 'immediate',
-    deliverables: [],
+    deliverables: '',
     contractSigned: false,
     contractSignedDate: '',
     paymentStatus: 'pending',

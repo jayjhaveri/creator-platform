@@ -34,12 +34,6 @@ export interface Creator {
   updatedAt: string;
 }
 
-export interface CampaignPlatformRequirement {
-  platform: 'instagram' | 'youtube' | 'tiktok' | 'facebook' | 'twitter';
-  contentType: 'post' | 'story' | 'reel' | 'video' | 'live';
-  quantity: number;
-}
-
 export interface CampaignTargetCategory {
   category: Creator['category'];
   minFollowers: number;
@@ -53,21 +47,13 @@ export interface Campaign {
   description: string;
   budget: number;
   targetAudience: string;
-  requiredPlatforms: CampaignPlatformRequirement[];
+  deliverables: string;
   startDate: string;
   endDate: string;
   status: 'draft' | 'active' | 'negotiating' | 'completed' | 'cancelled';
   targetCreatorCategories: CampaignTargetCategory[];
   createdAt: string;
   updatedAt: string;
-}
-
-export interface Deliverable {
-  platform: CampaignPlatformRequirement['platform'];
-  contentType: CampaignPlatformRequirement['contentType'];
-  quantity: number;
-  deadline: string;
-  status?: 'pending' | 'in_progress' | 'submitted' | 'approved' | 'completed';
 }
 
 export interface Negotiation {
@@ -80,7 +66,7 @@ export interface Negotiation {
   counterRate: number;
   finalRate: number;
   maxBudget: number;
-  deliverables: Deliverable[];
+  deliverables: string; // Freeform field like "1 post, 3 reels, 1 story"
   aiAgentNotes: string;
   creatorAvailability: 'available' | 'busy' | 'unavailable' | 'unknown';
   initialContactMethod: 'email' | 'phone' | 'instagram' | 'youtube';
@@ -117,7 +103,7 @@ export interface Deal {
   creatorId: string;
   finalRate: number;
   paymentTerms: 'immediate' | '30_days' | '60_days' | 'on_delivery' | 'milestone_based';
-  deliverables: Deliverable[];
+  deliverables: string; // Freeform field like "1 post, 3 reels, 1 story"
   contractSigned: boolean;
   contractSignedDate: string;
   paymentStatus: 'pending' | 'processing' | 'completed' | 'failed';

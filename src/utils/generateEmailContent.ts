@@ -36,7 +36,7 @@ Your goal:
 Campaign Overview:
 - Name: ${campaign.campaignName}
 - Description: ${campaign.description}
-- Platforms: ${campaign.requiredPlatforms.map(p => `${p.platform} (${p.contentType} x${p.quantity})`).join(', ')}
+- Deliverables: ${campaign.deliverables}
 - Budget: ₹${campaign.budget}
 - Timeline: ${campaign.startDate} to ${campaign.endDate}
 
@@ -94,9 +94,7 @@ Your job is to handle the entire email thread with creator "${creator.displayNam
 
 Campaign details:
 - Description: ${campaign.description}
-- Platforms: ${campaign.requiredPlatforms
-            .map((p) => `${p.platform} (${p.contentType} x${p.quantity})`)
-            .join(", ")}
+- Deliverables: ${campaign.deliverables}
 - Budget: ₹${campaign.budget}
 - Timeline: ${campaign.startDate} to ${campaign.endDate}
 
