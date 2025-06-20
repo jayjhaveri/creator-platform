@@ -181,10 +181,6 @@ Input:
                     // Create
                     z.object({
                         brandName: z.string(),
-                        email: z.string().email().optional(),
-                        website: z.string().optional(),
-                        industry: z.string().optional(),
-                        companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']).optional(),
                         description: z.string().optional(),
                     }),
                     // Read
@@ -211,15 +207,15 @@ Input:
                             .replace(/\s+/g, '.')
                             .replace(/[^a-z0-9.]/g, '');
 
-                        const email = payload.email || `${sanitizedName}@autogen.email`;
+                        const email = `${sanitizedName}@autogen.email`;
 
                         const result = await createBrand({
                             brandName: payload.brandName,
                             email,
                             phone,
-                            website: payload.website || 'Not specified',
-                            industry: payload.industry || 'Not specified',
-                            companySize: payload.companySize || 'Not specified',
+                            website: 'Not specified',
+                            industry: 'Not specified',
+                            companySize: 'Not specified',
                             description: payload.description || '',
                             isActive: true,
                         });
