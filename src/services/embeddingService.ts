@@ -50,8 +50,9 @@ export async function generateEmbeddingsForChunks(text: string): Promise<Embeddi
             });
 
             if (embeddings?.[0]?.embedding) {
+                const normalized = normalizeVector(embeddings[0].embedding);
                 results.push({
-                    embedding: embeddings[0].embedding,
+                    embedding: normalized,
                     chunkText: chunk,
                     chunkIndex: i
                 });
@@ -65,4 +66,9 @@ export async function generateEmbeddingsForChunks(text: string): Promise<Embeddi
 
     logger.info(`✅ Generated ${results.length} embeddings out of ${chunks.length} chunks`);
     return results;
+}
+
+function normalizeVector(vec: number[]): number[] {
+    const norm = Math.sqrt(vec.reduce((sum, x) => sum + x * x, 0));
+    return vec.map(x => x / norm);
 }
