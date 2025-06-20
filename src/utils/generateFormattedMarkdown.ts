@@ -32,6 +32,8 @@ Format with headers like # Brand Info, ## Campaign, ## Communications, and under
 
 For each communication, include sender (brand or creator), subject, and content.
 
+All currency values should be formatted in Indian Rupees (₹).
+
 Here's the data:
 
 ${JSON.stringify(rawInput, null, 2)}

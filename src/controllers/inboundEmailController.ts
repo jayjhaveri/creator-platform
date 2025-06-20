@@ -14,6 +14,7 @@ import { sendWhatsAppReply } from '../utils/whatsapp';
 
 // @ts-ignore
 import EmailReplyParser from 'email-reply-parser';
+import { saveAgentMessage } from '../utils/chatHistory';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
@@ -258,6 +259,7 @@ https://influenzer-flow-dashboard.lovable.app/campaigns/${campaign.campaignId}
         // Send WhatsApp message to the brand's phone
         if (brand.phone) {
             await sendWhatsAppReply(brand.phone, whatsappMessage);
+            await saveAgentMessage(brand.phone, whatsappMessage, brand.phone)
         } else {
             logger.warn(`Brand ${brand.brandId} does not have a phone number to send WhatsApp notification`);
         }

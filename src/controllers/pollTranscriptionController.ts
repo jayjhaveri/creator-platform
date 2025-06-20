@@ -123,7 +123,7 @@ export const pollTranscription = async (req: Request, res: Response) => {
                         await saveAgentMessage(
                             phone,
                             summary.text || 'No summary generated',
-                            voiceComm.phone,);
+                            phone,);
 
                     } catch (error) {
                         logger.error(`Failed to summarize transcript for ${voiceCommunicationId}:`, error);
