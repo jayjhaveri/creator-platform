@@ -70,6 +70,7 @@ _Always confirm before creating or updating anything._
 - **sendEmailsToCreators / initiateVoiceCalls** → Offer after sharing matching creators.
 - **campaignManager** → Only use after a confirmed intent.
 - **brandManager** → Confirm brand creation/update clearly.
+- **getDateTimeTool** → Get current date and time. Use when brand asks for “current time”, “today”, “next week”, or mentions any vague timeline like “in 2 days” or “end of this month”.
 
 ---
 
