@@ -12,6 +12,9 @@ import { init } from 'groq-sdk/_shims';
 import { initiateVoiceAgent, scheduleInitiateCallViaCloudTask } from '../services/voiceAgent/initiateVoiceAgent';
 import { sendWhatsAppReply } from '../utils/whatsapp';
 
+// @ts-ignore
+import EmailReplyParser from 'email-reply-parser';
+
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
 const tasksClient = new CloudTasksClient();
@@ -87,6 +90,11 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
         const communicationId = uuidv4();
         const now = new Date().toISOString();
 
+        const parser = new EmailReplyParser();
+        const replyOnly = parser.read(text).getVisibleText();
+
+        logger.info('Reply-only message extracted:', replyOnly);
+
         const communication: Communication = {
             communicationId,
             negotiationId,
@@ -94,7 +102,7 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
             direction: 'inbound',
             status: 'replied',
             subject: subject || '',
-            content: text || '',
+            content: replyOnly || '',
             aiAgentUsed: false,
             voiceCallDuration: 0,
             voiceCallSummary: '',
@@ -239,7 +247,7 @@ export const handleInboundEmail = async (req: Request, res: Response) => {
 📧 *Email*: ${creator.email}
 📢 *Campaign*: ${campaign.campaignName}
 📝 *Reply*:
-${text?.slice(0, 400) || '[No content]'}
+${replyOnly?.slice(0, 400) || '[No content]'}
 
 💡 *AI Notes*: ${analysis.notes}
 
