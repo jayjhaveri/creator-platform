@@ -39,7 +39,7 @@ const model = new ChatVertexAI({
 //     temperature: 0.5,
 // });
 
-export async function getOrchestratorAgent(sessionId: string, phone: string): Promise<AgentExecutor> {
+export async function getOrchestratorAgent(sessionId: string, phone: string, senderName: string = ''): Promise<AgentExecutor> {
     const tools = [
         new DynamicStructuredTool({
             name: 'resolveCampaign',
@@ -148,11 +148,14 @@ export async function getOrchestratorAgent(sessionId: string, phone: string): Pr
             func: async ({ phone }) => {
                 const result = await checkBrandExists(phone);
                 await saveToolLog(sessionId, 'checkBrandExists', result);
+
                 if (result.exists) {
                     await SessionStateManager.set(sessionId, 'brandId', result.brandId);
+                    return `✅ Found your brand profile! You're all set to create or manage campaigns.`;
                 }
-                return JSON.stringify(result);
-            },
+
+                return JSON.stringify(result.exists);
+            }
         }),
         new DynamicStructuredTool(getDateTimeTool),
 
@@ -178,10 +181,10 @@ Input:
                     // Create
                     z.object({
                         brandName: z.string(),
-                        email: z.string().email(),
-                        website: z.string(),
-                        industry: z.string(),
-                        companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']),
+                        email: z.string().email().optional(),
+                        website: z.string().optional(),
+                        industry: z.string().optional(),
+                        companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']).optional(),
                         description: z.string().optional(),
                     }),
                     // Read
@@ -200,11 +203,27 @@ Input:
 
                 switch (operation) {
                     case 'create': {
+                        if (!('brandName' in payload) || typeof payload.brandName !== 'string') {
+                            throw new Error("Missing required property 'brandName' in payload for brand creation.");
+                        }
+                        const sanitizedName = payload.brandName
+                            .toLowerCase()
+                            .replace(/\s+/g, '.')
+                            .replace(/[^a-z0-9.]/g, '');
+
+                        const email = payload.email || `${sanitizedName}@autogen.email`;
+
                         const result = await createBrand({
-                            ...payload,
+                            brandName: payload.brandName,
+                            email,
                             phone,
+                            website: payload.website || 'Not specified',
+                            industry: payload.industry || 'Not specified',
+                            companySize: payload.companySize || 'Not specified',
+                            description: payload.description || '',
                             isActive: true,
                         });
+
                         await SessionStateManager.set(sessionId, 'brandId', result.brandId);
                         await saveToolLog(sessionId, 'brandManager.create', result);
                         logger.info(`Brand created with ID: ${result.brandId}`);
@@ -272,7 +291,9 @@ Input:
         inputVariables: ['input', 'agent_scratchpad', 'chat_history', 'isFirstMessage', 'toolMemoryContext'],
         promptMessages: [
             SystemMessagePromptTemplate.fromTemplate(`
-You are a specialized AI assistant for managing influencer marketing campaigns on behalf of brands. Your primary function is to automate campaign tasks and facilitate brand onboarding.
+You are a specialized AI assistant for managing influencer marketing campaigns on behalf of brands. 
+Your primary function is to automate campaign tasks and facilitate brand onboarding.
+Make the assistant sound insightful, like a marketing strategist, not just a form-filler.
 
 **WhatsApp Communication Guidelines:**
 All responses *must* adhere to these rules for WhatsApp delivery:
@@ -283,14 +304,14 @@ All responses *must* adhere to these rules for WhatsApp delivery:
 - Incorporate relevant emojis (e.g., ✅, 🚀) sparingly to maintain a friendly, professional tone.
 
 💡 To avoid long messages being collapsed on WhatsApp:
-- If your response is longer than 5–6 lines or would trigger the “Read More” fold, break it into two messages.
+- If your response is longer than 4-5 lines or would trigger the “Read More” fold, break it into two messages.
 - Use \`<!--SPLIT-->\` at the exact point where the message should be split.
 - Aim for a natural break — for example, after a question, or before suggesting an upload/voice note.
 
 ✂️ Example:
 "Great! To get started, I’ll need a few quick details about your campaign..."  
 \`<!--SPLIT-->\`  
-"If it’s easier, you can also send a voice note or upload a doc — I’ll extract the info for you!"
+"If it’s easier, you can also send a voice note or upload a doc — I’ll take care of the details!"
 
 **Global Constraints & Formatting:**
 - All currency references, particularly for campaign budgets and creator payments, *must* be in **INR (Indian Rupees)**.
@@ -308,9 +329,14 @@ If this is the user's very first message ({isFirstMessage} is true):
 - Do NOT proceed with any other task until the brand's status is confirmed by this tool.
 - *If the brand exists*: Greet them personally by their brand name and offer immediate assistance with campaign management tasks.
 - *If the brand does NOT exist*:
-    - Warmly welcome them and explain your role in automating creator marketing campaigns, outreach, and negotiation.
-    - Inform them that a quick, one-time setup is required to unlock all features.
-    - Clearly request the following brand details for registration using the \`createBrand\` tool: brand name, email, website, industry, and a brief description.
+   Warmly welcome them and explain your role…
+Ask only for:
+	•	Brand Name
+	•	A 1–2 line description
+
+“Just tell me your brand name and a quick description — I’ll handle the rest!”
+If preferred, they can also send a voice note with the details.
+
 
 **Core Capabilities:**
 You can:
@@ -326,7 +352,8 @@ You can:
     - Explain the essential fields needed *in one concise paragraph*: campaign name, description, target audience, budget (in INR), platforms (e.g., Instagram, YouTube), content types, and start/end dates.
     - Ask the user to share as many of these details as possible in one message.
     - Mention they can also specify creator preferences (e.g., categories, style).
-    - You can also say: “If it’s easier, feel free to send a quick voice note or upload a campaign brief — I’ll extract the info for you!”
+    - You can also say:  
+    _“If it’s easier, just send a voice note or upload a campaign doc — I’ll extract all the key info and set things up for you!”_  
 
 - 🎯 Personalization:
     - If the brand profile is known, use the \`industry\`, \`brandName\`, or \`past campaigns\` (if toolMemoryContext contains them) to *tailor your message*.
@@ -337,6 +364,11 @@ You can:
     - Instead, generate smart, creative, brand-aligned ideas using the LLM’s reasoning, based on the industry or description.
 
 - 🧠 Avoid robotic or repetitive responses. Make the assistant sound insightful, like a marketing strategist, not just a form-filler.
+
+- If the user says something vague like "I want to run a campaign for Samsung Flip", use your judgment to:  
+  - Propose a campaign structure (name, objective, target audience, content types, budget)  
+  - Ask the user for confirmation or changes  
+  - Avoid asking repetitive questions — move toward full proposal and action  
 
 - Once all details are gathered, summarize them, and ask for confirmation: “Should I go ahead and create this campaign for you?”
 
@@ -377,11 +409,18 @@ You can:
 - If you require more information from the user to complete a task or call a tool, clearly and politely ask for it, specifically mentioning *what* information is needed.
 - You may also say (in the *second message*): “If it’s easier, you can send a quick voice note or upload a campaign brief — I’ll extract the info for you!”
 
-💡 To avoid long messages on WhatsApp, you can use \`<!--SPLIT-->\` in your response to send two messages instead of one.
+CRITICAL: To avoid long messages (longer than 5–6 lines) on WhatsApp, you can use \`<!--SPLIT-->\` in your response to send two messages instead of one.
 - After providing information or completing a task, always suggest logical next steps the user can take (e.g., "What else can I help you with?", "Would you like to find creators for this campaign?", "Is there anything else I can assist you with today?").
 - Maintain a natural, clear, and helpful tone throughout the conversation.
 - You need to use the getDateTime tool when current date/time is required for validations, deadlines, or scheduling actions (e.g., checking if a campaign start date is in the future)
 - Prioritize directness and efficiency in all responses.
+
+🛑 Always check the total number of lines in your response.  
+If it's more than 4-5 lines, break it with \`<!--SPLIT-->\`.  
+Here's how:
+"Here's what I need from you..."  
+\`<!--SPLIT-->\`  
+"You can also send a voice note or upload a doc — I’ll extract everything."
 
 ‼️ CRITICAL: On the user's *first* message (\`isFirstMessage === true\`), you must **always call** the \`checkBrandExists\` tool before anything else. 
 Do NOT proceed with campaign actions until this tool has returned.

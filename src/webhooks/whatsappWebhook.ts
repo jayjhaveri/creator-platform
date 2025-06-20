@@ -28,6 +28,7 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
         const sessionId = phone;
         const userId = phone;
         const contentType = data.content?.media?.type || 'text';
+        const senderName = data.whatsapp?.senderName || 'Unknown Sender';
         //log content type
         logger.info('Content type received', { contentType });
         let extractedText = '';
@@ -79,7 +80,7 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
         }
 
         // Step 3: Pass to agent
-        const agent = await getOrchestratorAgent(sessionId, phone);
+        const agent = await getOrchestratorAgent(sessionId, phone, senderName);
         let result = await agent.invoke({ input: extractedText });
 
         if (!result.output || result.output.trim() === '') {
