@@ -74,7 +74,7 @@ export async function findMatchingCreators({ campaignId }: { campaignId: string 
 
         // Sort creators by descending score and take top 10
         const sorted = Array.from(scoreMap.entries())
-            .sort((a, b) => b[1] - a[1])
+            .sort((a, b) => a[1] - b[1]) // Ascending distance = more similar
             .slice(0, 10);
 
         const results: CreatorMatch[] = [];
