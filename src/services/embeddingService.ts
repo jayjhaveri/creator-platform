@@ -28,7 +28,7 @@ export async function generateEmbeddingsForChunks(text: string): Promise<Embeddi
     logger.info('🧠 generateEmbeddingsForChunks() called');
     logger.info('📥 Input text length:', text.length);
 
-    const chunkSize = 800; // 1000 characters per chunk
+    const chunkSize = 1000; // 1000 characters per chunk
     const chunkOverlap = 200; // 200 characters overlap
     logger.info(`🔍 Splitting text into chunks of size ${chunkSize} with overlap ${chunkOverlap}`);
 
@@ -45,7 +45,7 @@ export async function generateEmbeddingsForChunks(text: string): Promise<Embeddi
                 content: chunk,
                 options: {
                     outputDimensionality: 768,
-                    taskType: "RETRIEVAL_DOCUMENT"
+                    taskType: "RETRIEVAL_QUERY"
                 }
             });
 

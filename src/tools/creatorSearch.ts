@@ -34,6 +34,7 @@ export async function findMatchingCreators({ campaignId }: { campaignId: string 
 
         // Combine key fields for embedding
         const contextText = `${campaign.description || ''}`;
+        logger.info(`📄 Campaign context text length: ${contextText.length}`);
         logger.info('🧠 Splitting and embedding campaign context into chunks');
         const chunks = await generateEmbeddingsForChunks(contextText);
         if (chunks.length === 0) {
