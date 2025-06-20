@@ -23,12 +23,26 @@ export async function upsertChunksToVectorStore({ chunks }: VectorStoreInput): P
     const collectionRef = db.collection('chunks');
 
     for (const { vector, metadata } of chunks) {
-        const docRef = collectionRef.doc();
-        batch.set(docRef, {
-            vectorEmbedding: FieldValue.vector(vector),
-            ...metadata,
-            createdAt: new Date().toISOString(),
-        });
+        const querySnapshot = await collectionRef.where('sourceId', '==', metadata.sourceId).get();
+
+        if (!querySnapshot.empty) {
+            // Update existing document
+            querySnapshot.forEach((doc) => {
+                batch.update(doc.ref, {
+                    vectorEmbedding: FieldValue.vector(vector),
+                    ...metadata,
+                    updatedAt: new Date().toISOString(),
+                });
+            });
+        } else {
+            // Create new document
+            const docRef = collectionRef.doc();
+            batch.set(docRef, {
+                vectorEmbedding: FieldValue.vector(vector),
+                ...metadata,
+                createdAt: new Date().toISOString(),
+            });
+        }
     }
 
     try {
