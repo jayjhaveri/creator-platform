@@ -8,6 +8,10 @@ import {
     deleteCreator,
     listCreators
 } from '../controllers/creatorsController';
+import logger from '../utils/logger';
+import { db } from '../config/firebase';
+import { generateEmbeddingsForChunks } from '../services/embeddingService';
+import { upsertChunksToVectorStore } from '../services/vectorStore';
 
 const router = express.Router();
 
@@ -48,6 +52,49 @@ router.post(
     verifyFirebaseToken,
     asyncHandler(createCreator)
 );
+
+router.post('/reprocess-creators', async (req, res) => {
+    logger.info('🚀 Triggered /tools/reprocess-creators');
+
+    try {
+        const snapshot = await db.collection('creators').get();
+        logger.info(`🔍 Found ${snapshot.size} creators`);
+
+        for (const doc of snapshot.docs) {
+            const creatorId = doc.id;
+            const creator = doc.data();
+
+            const embeddingText = `${creator.displayName || ''} ${creator.bio || ''} ${creator.category || ''}`;
+            logger.info(`🧠 Reprocessing creator: ${creator.displayName} (${creatorId})`);
+
+            try {
+                const chunks = await generateEmbeddingsForChunks(embeddingText);
+
+                await upsertChunksToVectorStore({
+                    chunks: chunks.map(chunk => ({
+                        vector: chunk.embedding,
+                        metadata: {
+                            parentCollection: 'creators',
+                            sourceId: creatorId,
+                            chunkIndex: chunk.chunkIndex,
+                            chunkText: chunk.chunkText,
+                        },
+                    })),
+                });
+
+                logger.info(`✅ Vector updated for: ${creator.displayName}`);
+            } catch (err) {
+                logger.error(`❌ Failed processing creator ${creatorId}:`, err);
+            }
+        }
+
+        logger.info('🎉 Finished reprocessing all creators');
+        res.status(200).send('All creators reprocessed successfully');
+    } catch (error) {
+        logger.error('🔥 Error in /reprocess-creators:', error);
+        res.status(500).send('Internal server error');
+    }
+});
 
 /**
  * @swagger
@@ -136,5 +183,7 @@ router.get(
     verifyFirebaseToken,
     asyncHandler(listCreators)
 );
+
+
 
 export default router;
