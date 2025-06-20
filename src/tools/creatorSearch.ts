@@ -33,7 +33,7 @@ export async function findMatchingCreators({ campaignId }: { campaignId: string 
         const campaign = campaignSnap.data()!;
 
         // Combine key fields for embedding
-        const contextText = `${campaign.description || ''} ${campaign.targetAudience || ''}`;
+        const contextText = `${campaign.description || ''}`;
         logger.info('🧠 Splitting and embedding campaign context into chunks');
         const chunks = await generateEmbeddingsForChunks(contextText);
         if (chunks.length === 0) {
@@ -53,6 +53,7 @@ export async function findMatchingCreators({ campaignId }: { campaignId: string 
                     limit: 25,
                     distanceMeasure: 'COSINE',
                     distanceResultField: 'similarityScore',
+                    distanceThreshold: 0.51, // Adjust threshold as needed
                 })
                 .get();
 
