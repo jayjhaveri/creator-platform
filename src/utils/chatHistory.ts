@@ -52,7 +52,13 @@ export async function getSessionData(sessionId: string): Promise<{
     const snapshot = await ref.get();
     const data = snapshot.data();
     return {
-        messages: data?.messages || [],
+        messages: [
+            ...(data?.messages || []).map((msg: any) => ({
+                role: msg.role,
+                content: msg.content || 'no content',
+                timestamp: msg.timestamp || new Date().toISOString(),
+            })),
+        ],
         userId: data?.userId
     };
 }

@@ -93,24 +93,24 @@ export const pollTranscription = async (req: Request, res: Response) => {
                         const dashboardLink = `https://influenzer-flow-dashboard.lovable.app/campaigns/${negotiation.campaignId}`;
 
                         const summaryPrompt = `
-  You are a WhatsApp-friendly AI summarizer for brand ${brand.brandName}. Format the output in a brief and readable style, use *bold* and emojis where helpful.
-  
-  Context:
-  - Creator: ${creator?.displayName || 'Unknown'} (${creator?.category || 'N/A'})
-  - Campaign: ${campaign?.campaignName || 'Unnamed Campaign'}
-  - Budget: ₹${campaign?.budget?.toLocaleString() || 'N/A'}
- 
-  
-  Summarize the voice call transcript below. Highlight:
-  - Outcomes or agreements (content, payment, timing)
-  - Action items or follow-ups
-  - Use natural tone, keep it under 6 lines
-  - for more details, visit: ${dashboardLink}
+You are an AI assistant for the brand *${brand.brandName}*, summarizing a voice call the brand had with a creator.
 
-  Transcript:
-  ${transcriptText}
-  `;
-                        const summary = await model.invoke([new HumanMessage(summaryPrompt)]);
+🎯 *Your goal*: Write a crisp, friendly WhatsApp message that starts with: "Hi *${brand.brandName}* team 👋," and summarizes what the creator said and what was agreed. Use a clear, structured style. Use *bold*, emojis, and short bullet points.
+
+🧾 *Context*:
+- 👤 Creator: ${creator?.displayName || 'Unknown'} (${creator?.category || 'N/A'})
+- 📣 Campaign: ${campaign?.campaignName || 'Unnamed Campaign'}
+- 💰 Budget: ₹${campaign?.budget?.toLocaleString() || 'N/A'}
+
+📌 *Summarize the call* by highlighting:
+- ✅ Agreements (content type, payment, deadlines)
+- 📌 Pending decisions or follow-ups
+- 📬 Next steps for the brand team
+- 🔗 For full details: ${dashboardLink}
+
+🗣️ Transcript below:
+${transcriptText}
+`; const summary = await model.invoke([new HumanMessage(summaryPrompt)]);
 
                         let phone = brand.phone || 'No phone number provided';
 
