@@ -70,5 +70,6 @@ export async function generateEmbeddingsForChunks(text: string): Promise<Embeddi
 
 function normalizeVector(vec: number[]): number[] {
     const norm = Math.sqrt(vec.reduce((sum, x) => sum + x * x, 0));
+    logger.info(`🔍 Normalizing vector with norm: ${norm}`);
     return vec.map(x => x / norm);
 }
