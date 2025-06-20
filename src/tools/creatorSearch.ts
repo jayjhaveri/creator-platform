@@ -54,7 +54,6 @@ export async function findMatchingCreators({ campaignId }: { campaignId: string 
                     limit: 25,
                     distanceMeasure: 'COSINE',
                     distanceResultField: 'similarityScore',
-                    distanceThreshold: 0.51, // Adjust threshold as needed
                 })
                 .get();
 
