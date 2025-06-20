@@ -50,7 +50,7 @@ export async function findMatchingCreators({ campaignId }: { campaignId: string 
                 .findNearest({
                     vectorField: 'vectorEmbedding',
                     queryVector: embedding,
-                    limit: 5,
+                    limit: 25,
                     distanceMeasure: 'COSINE',
                     distanceResultField: 'similarityScore',
                 })
@@ -62,7 +62,7 @@ export async function findMatchingCreators({ campaignId }: { campaignId: string 
                 const creatorId = doc.get('sourceId') as string;
                 const score = doc.get('similarityScore') as number;
                 const existing = scoreMap.get(creatorId) ?? 0;
-                scoreMap.set(creatorId, Math.max(existing, score));
+                scoreMap.set(creatorId, (scoreMap.get(creatorId) ?? 0) + score);
             }
         }
 

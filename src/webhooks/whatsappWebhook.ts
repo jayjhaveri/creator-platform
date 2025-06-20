@@ -84,6 +84,7 @@ export async function whatsappWebhookHandler(req: Request, res: Response) {
         let result = await agent.invoke({ input: extractedText });
 
         if (!result.output || result.output.trim() === '') {
+            logger.warn('Agent returned empty output, retrying with extracted text');
             result = await agent.invoke({ input: extractedText });
             if (!result.output || result.output.trim() === '') {
                 result.output = 'Sorry, I could not generate a response at this time. Please try again later.';
